@@ -573,7 +573,7 @@ export default function Dashboard() {
                               </div>
                               
                               {/* Actions */}
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity duration-200">
                                 <Button variant="ghost" size="sm" onClick={() => openEditModal(video)} className="text-zinc-400 hover:text-white h-8 w-8 p-0">
                                   <EditIcon />
                                 </Button>
