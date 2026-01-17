@@ -372,10 +372,8 @@ export default function Dashboard() {
 
   const formatNumber = (num: string | number | undefined) => {
     if (!num) return '-';
-    const n = typeof num === 'string' ? parseInt(num) : num;
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-    return n.toString();
+    // Show exact number with commas as requested
+    return parseInt(String(num)).toLocaleString();
   };
 
   const getStatusBadge = (videoStatus: string) => {
@@ -442,12 +440,17 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Animated background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black pointer-events-none" />
-      <div className="fixed top-0 left-1/2 w-[800px] h-[400px] bg-red-500/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-      
+      {/* Animated Live Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[120px] animate-[pulse_8s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-[pulse_10s_ease-in-out_infinite_1s]" />
+        <div className="absolute top-[40%] left-[20%] w-[30%] h-[30%] bg-red-500/5 rounded-full blur-[100px] animate-[pulse_12s_ease-in-out_infinite_2s]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:24px_24px]" />
+      </div>
+       
       {/* Top Navigation */}
-      <nav className="border-b border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl sticky top-0 z-50 relative">
+      <nav className="border-b border-zinc-800/50 bg-zinc-900/60 backdrop-blur-xl sticky top-0 z-50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -653,7 +656,7 @@ export default function Dashboard() {
                             size="sm" 
                             variant="destructive" 
                             onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                            className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/20 border-0 animate-in zoom-in duration-300"
                           >
                             Delete Selected ({selectedVideos.size})
                           </Button>
@@ -717,7 +720,7 @@ export default function Dashboard() {
                               </div>
                               
                               {/* Actions */}
-                              <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity duration-200">
+                              <div className="flex items-center gap-1 transition-opacity duration-200">
                                 <Button variant="ghost" size="sm" onClick={() => openEditModal(video)} className="text-zinc-400 hover:text-white h-8 w-8 p-0">
                                   <EditIcon />
                                 </Button>
@@ -750,7 +753,7 @@ export default function Dashboard() {
                             size="sm" 
                             variant="destructive" 
                             onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                            className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/20 border-0 animate-in zoom-in duration-300"
                           >
                             Delete Selected ({selectedVideos.size})
                           </Button>
