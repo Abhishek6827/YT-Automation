@@ -246,20 +246,28 @@ export default function Dashboard() {
     if (!editingVideo) return;
     setIsRegenerating(true);
     try {
+      console.log('Regenerating metadata for:', editingVideo.fileName);
       const res = await fetch('/api/ai/regenerate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: editingVideo.fileName })
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+      console.log('AI Response:', data);
+      if (res.ok && data.title) {
         setEditForm({
-          title: data.title || editForm.title,
+          title: data.title,
           description: data.description || editForm.description,
           tags: data.tags || editForm.tags
         });
+      } else {
+        console.error('AI regeneration failed:', data.error || 'No data returned');
+        alert('Failed to regenerate: ' + (data.error || 'Please try again'));
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error('AI regeneration error:', e); 
+      alert('Failed to regenerate metadata');
+    }
     setIsRegenerating(false);
   };
 
