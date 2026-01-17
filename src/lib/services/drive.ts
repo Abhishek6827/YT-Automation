@@ -32,39 +32,59 @@ export function createDriveClient(accessToken: string) {
     return google.drive({ version: 'v3', auth });
 }
 
-// List video files from a folder
+export interface DriveFile {
+    id: string;
+    name: string;
+    mimeType: string;
+    size?: string;
+    createdTime?: string;
+}
+
+// List video files from a folder (recursively)
 export async function listVideosFromFolder(
     accessToken: string,
-    folderId: string
+    folderId: string,
+    depth: number = 0,
+    maxDepth: number = 2
 ): Promise<DriveFile[]> {
-    console.log(`[Drive] Listing videos from folder: ${folderId}`);
+    console.log(`[Drive] Listing videos from folder: ${folderId} (Depth: ${depth})`);
     const drive = createDriveClient(accessToken);
+    let allVideos: DriveFile[] = [];
 
     try {
-        const response = await drive.files.list({
+        // 1. Search for videos in current folder
+        const videoResponse = await drive.files.list({
             q: `'${folderId}' in parents and (mimeType contains 'video/') and trashed = false`,
             fields: 'files(id, name, mimeType, size, createdTime)',
             orderBy: 'createdTime desc',
             pageSize: 100,
         });
 
-        const files = (response.data.files || []) as DriveFile[];
-        console.log(`[Drive] Found ${files.length} video files`);
+        const videos = (videoResponse.data.files || []) as DriveFile[];
+        allVideos = [...videos];
+        console.log(`[Drive] Found ${videos.length} videos in folder ${folderId}`);
 
-        if (files.length === 0) {
-            // Debug: Check if there are ANY files
-            const allFiles = await drive.files.list({
-                q: `'${folderId}' in parents and trashed = false`,
-                pageSize: 10,
-                fields: 'files(id, name, mimeType)',
+        // 2. Search for subfolders if depth limit not reached
+        if (depth < maxDepth) {
+            const folderResponse = await drive.files.list({
+                q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+                fields: 'files(id, name)',
+                pageSize: 20,
             });
-            console.log(`[Drive] Debug: Found ${allFiles.data.files?.length || 0} total files (any type) in folder`);
-            if (allFiles.data.files && allFiles.data.files.length > 0) {
-                console.log('[Drive] Sample file MimeTypes:', allFiles.data.files.map(f => `${f.name}: ${f.mimeType}`));
+
+            const subfolders = folderResponse.data.files || [];
+            if (subfolders.length > 0) {
+                console.log(`[Drive] Found ${subfolders.length} subfolders in ${folderId}, checking recursively...`);
+                for (const subfolder of subfolders) {
+                    if (subfolder.id) {
+                        const subVideos = await listVideosFromFolder(accessToken, subfolder.id, depth + 1, maxDepth);
+                        allVideos = [...allVideos, ...subVideos];
+                    }
+                }
             }
         }
 
-        return files;
+        return allVideos;
     } catch (error) {
         console.error('[Drive] Error listing files:', error);
         throw error;
@@ -99,12 +119,4 @@ export async function getFileMetadata(
     });
 
     return response.data as DriveFile;
-}
-
-export interface DriveFile {
-    id: string;
-    name: string;
-    mimeType: string;
-    size?: string;
-    createdTime?: string;
 }
