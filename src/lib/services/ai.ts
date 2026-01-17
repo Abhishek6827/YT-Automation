@@ -89,15 +89,16 @@ Output ONLY valid JSON.`;
         };
     } catch (error) {
         console.error('Error generating metadata:', error);
+        console.error('GEMINI_API_KEY set:', !!process.env.GEMINI_API_KEY);
 
-        // Fallback metadata
+        // Fallback metadata - include [AI FAILED] prefix to indicate fallback
         const cleanName = fileName
             .replace(/\.[^/.]+$/, '') // Remove extension
             .replace(/[_-]/g, ' ')    // Replace underscores/dashes with spaces
             .trim();
 
         return {
-            title: cleanName.slice(0, 100),
+            title: `[AI Failed] ${cleanName}`.slice(0, 100),
             description: `Check out this video: ${cleanName}\n\n#shorts #viral #trending`,
             tags: ['shorts', 'viral', 'trending', 'video'],
         };
