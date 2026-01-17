@@ -130,8 +130,10 @@ export default function Dashboard() {
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [drivePreviewOpen, setDrivePreviewOpen] = useState(false);
+
   const [driveFiles, setDriveFiles] = useState<{id: string, name: string, driveUrl: string}[]>([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
 
   // Fetch functions
   const fetchSettings = useCallback(async () => {
@@ -916,52 +918,66 @@ export default function Dashboard() {
 
       {/* Drive Preview Modal */}
       <Dialog open={drivePreviewOpen} onOpenChange={setDrivePreviewOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white w-[95vw] max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b border-zinc-800">
             <DialogTitle className="text-xl text-white flex items-center gap-2">
               <FolderIcon /> Drive Files Preview
             </DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Files found in the configured Google Drive folder.
+              Files found in the configured Google Drive folder. Hover to play.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto min-h-[300px] border border-zinc-800 rounded-lg bg-zinc-950/50 p-4">
+          <div className="flex-1 overflow-y-auto p-4 bg-zinc-950/50">
             {isPreviewLoading ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2">
+              <div className="flex flex-col items-center justify-center h-40 gap-2">
                 <RefreshIcon spinning />
                 <p className="text-zinc-500 text-sm">Scanning Drive...</p>
               </div>
             ) : driveFiles.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center h-40">
                 <p className="text-zinc-500">No files found or unable to access folder.</p>
                 <p className="text-zinc-600 text-xs mt-1">Check permissions and folder link.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {driveFiles.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800/50 rounded-lg hover:border-zinc-700 transition-colors group">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-8 h-8 bg-zinc-800 rounded flex items-center justify-center text-zinc-400">
-                        <PlayIcon />
+                  <div 
+                    key={file.id} 
+                    className="relative aspect-video bg-zinc-900 border border-zinc-800/50 rounded-xl overflow-hidden group hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all duration-300"
+                    onMouseEnter={() => setHoveredFileId(file.id)}
+                    onMouseLeave={() => setHoveredFileId(null)}
+                  >
+                    {hoveredFileId === file.id ? (
+                      <div className="absolute inset-0 bg-black z-10 flex flex-col">
+                         <video
+                           src={`/api/proxy/video/${file.id}`}
+                           className="w-full h-full object-cover"
+                           autoPlay
+                           playsInline
+                           controls // Allow user to unmute/seek
+                         />
                       </div>
-                      <span className="text-sm text-zinc-300 truncate font-medium">{file.name}</span>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                        <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 mb-2 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
+                          <PlayIcon />
+                        </div>
+                        <p className="text-xs text-zinc-400 text-center truncate w-full px-2 font-medium group-hover:text-zinc-200 transition-colors">{file.name}</p>
+                      </div>
+                    )}
+                    
+                    {/* Overlay info when not playing (or playing but controls hide it usually, but we keep it simple) */}
+                    <div className={`absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex justify-between items-end pointer-events-none transition-opacity duration-200 ${hoveredFileId === file.id ? 'opacity-0' : 'opacity-100'}`}>
+                       <span className="text-[10px] text-zinc-400 truncate flex-1 mr-2">{file.name}</span>
                     </div>
-                    <a 
-                      href={file.driveUrl} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="px-3 py-1.5 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md hover:bg-blue-500/20 transition-colors flex items-center gap-1"
-                    >
-                      <EyeIcon /> View/Play
-                    </a>
                   </div>
                 ))}
               </div>
             )}
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="p-4 border-t border-zinc-800 bg-zinc-900">
             <Button onClick={() => setDrivePreviewOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-white">
               Close
             </Button>
