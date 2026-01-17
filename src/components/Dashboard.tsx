@@ -93,6 +93,19 @@ const ExternalLinkIcon = () => (
   </svg>
 );
 
+const CheckIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const [settings, setSettings] = useState<Settings>({ driveFolderLink: '', uploadHour: 10, videosPerDay: 1 });
@@ -112,6 +125,13 @@ export default function Dashboard() {
 
   // Delete Confirmation Modal State
   const [deleteConfirmVideo, setDeleteConfirmVideo] = useState<Video | null>(null);
+
+  // Bulk Selection & Drive Preview State
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [drivePreviewOpen, setDrivePreviewOpen] = useState(false);
+  const [driveFiles, setDriveFiles] = useState<{id: string, name: string, driveUrl: string}[]>([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // Fetch functions
   const fetchSettings = useCallback(async () => {
@@ -209,12 +229,73 @@ export default function Dashboard() {
       const res = await fetch(`/api/videos/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setVideos(prev => prev.filter(v => v.id !== id));
+        // Remove from selection if present
+        if (selectedVideos.has(id)) {
+          const newSet = new Set(selectedVideos);
+          newSet.delete(id);
+          setSelectedVideos(newSet);
+        }
       } else {
         const data = await res.json();
         alert(data.error || 'Failed to delete');
       }
     } catch (e) { console.error(e); alert('Failed to delete'); }
     setIsDeleting(null);
+  };
+
+  // Bulk Delete Functions
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedVideos);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedVideos(newSet);
+  };
+
+  const selectAll = (filteredVideos: Video[]) => {
+    if (selectedVideos.size === filteredVideos.length && filteredVideos.length > 0) {
+      setSelectedVideos(new Set()); // Deselect all
+    } else {
+      setSelectedVideos(new Set(filteredVideos.map(v => v.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setShowBulkDeleteConfirm(false);
+    if (selectedVideos.size === 0) return;
+
+    // Delete locally first for UI responsiveness (optimistic)
+    const videosToDelete = Array.from(selectedVideos);
+    const remainingVideos = videos.filter(v => !selectedVideos.has(v.id));
+    setVideos(remainingVideos);
+    setSelectedVideos(new Set());
+
+    // Process deletions in background
+    for (const id of videosToDelete) {
+      try {
+        await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+      } catch (e) {
+        console.error('Failed to delete video:', id, e);
+      }
+    }
+  };
+
+  const openDrivePreview = async () => {
+    setDrivePreviewOpen(true);
+    setIsPreviewLoading(true);
+    try {
+      const res = await fetch('/api/automation/preview');
+      if (res.ok) {
+        const data = await res.json();
+        setDriveFiles(data.files || []);
+      } else {
+        const data = await res.json();
+        alert('Failed to load Drive files: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error connecting to Drive API');
+    }
+    setIsPreviewLoading(false);
   };
 
   const openEditModal = (video: Video) => {
@@ -447,9 +528,19 @@ export default function Dashboard() {
                   <Input 
                     value={settings.driveFolderLink || ''}
                     onChange={(e) => setSettings({ ...settings, driveFolderLink: e.target.value })}
-                    className="bg-zinc-950/50 border-zinc-700/50 focus:border-blue-500/50 focus:ring-blue-500/20 transition-all duration-300" 
+                    className="bg-zinc-950 border-zinc-700 text-zinc-300 focus:border-blue-500"
                     placeholder="https://drive.google.com/drive/folders/..."
                   />
+                  <div className="flex justify-end">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={openDrivePreview}
+                      className="text-xs text-blue-400 hover:text-blue-300 h-6 px-2"
+                    >
+                      <EyeIcon /> <span className="ml-1">Preview Files</span>
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -532,7 +623,7 @@ export default function Dashboard() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <Tabs defaultValue="published" className="w-full">
+                <Tabs defaultValue="published" className="w-full" onValueChange={() => setSelectedVideos(new Set())}>
                   <TabsList className="w-full rounded-none border-b border-zinc-800/50 bg-transparent p-0">
                     <TabsTrigger value="published" className="flex-1 rounded-none border-b-2 border-transparent px-4 py-3 text-zinc-400 data-[state=active]:border-red-500 data-[state=active]:text-white transition-all duration-300">
                       Published ({published.length})
@@ -544,6 +635,29 @@ export default function Dashboard() {
 
                   <TabsContent value="published" className="m-0">
                     <ScrollArea className="h-[550px]">
+                      {/* Bulk Actions Header */}
+                      <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10 backdrop-blur-sm">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            onClick={() => selectAll(published)}
+                            className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${published.length > 0 && selectedVideos.size === published.length ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-700 hover:border-zinc-500'}`}
+                          >
+                            {published.length > 0 && selectedVideos.size === published.length && <CheckIcon />}
+                          </div>
+                          <span className="text-sm text-zinc-400">Select All</span>
+                        </div>
+                        {selectedVideos.size > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive" 
+                            onClick={() => setShowBulkDeleteConfirm(true)}
+                            className="h-7 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                          >
+                            Delete Selected ({selectedVideos.size})
+                          </Button>
+                        )}
+                      </div>
+
                       {published.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                           <span className="text-4xl mb-4">📭</span>
@@ -552,7 +666,14 @@ export default function Dashboard() {
                       ) : (
                         <div className="divide-y divide-zinc-800/30">
                           {published.map((video) => (
-                            <div key={video.id} className="flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group">
+                            <div key={video.id} className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? 'bg-blue-500/5' : ''}`}>
+                              {/* Checkbox */}
+                              <div 
+                                className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-700 hover:border-zinc-500'}`}
+                                onClick={(e) => { e.stopPropagation(); toggleSelection(video.id); }}
+                              >
+                                {selectedVideos.has(video.id) && <CheckIcon />}
+                              </div>
                               {/* Thumbnail */}
                               <div className="w-24 h-14 bg-zinc-800 rounded-lg overflow-hidden flex-shrink-0 relative">
                                 {video.youtubeId ? (
@@ -611,6 +732,29 @@ export default function Dashboard() {
 
                   <TabsContent value="drafts" className="m-0">
                     <ScrollArea className="h-[550px]">
+                      {/* Bulk Actions Header */}
+                      <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10 backdrop-blur-sm">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            onClick={() => selectAll(drafts)}
+                            className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${drafts.length > 0 && selectedVideos.size === drafts.length ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-700 hover:border-zinc-500'}`}
+                          >
+                            {drafts.length > 0 && selectedVideos.size === drafts.length && <CheckIcon />}
+                          </div>
+                          <span className="text-sm text-zinc-400">Select All</span>
+                        </div>
+                        {selectedVideos.size > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive" 
+                            onClick={() => setShowBulkDeleteConfirm(true)}
+                            className="h-7 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                          >
+                            Delete Selected ({selectedVideos.size})
+                          </Button>
+                        )}
+                      </div>
+
                       {drafts.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                           <span className="text-4xl mb-4">✨</span>
@@ -620,7 +764,14 @@ export default function Dashboard() {
                       ) : (
                         <div className="divide-y divide-zinc-800/30">
                           {drafts.map((video) => (
-                            <div key={video.id} className="flex items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group">
+                            <div key={video.id} className={`flex items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? 'bg-blue-500/5' : ''}`}>
+                              {/* Checkbox */}
+                              <div 
+                                className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-700 hover:border-zinc-500'}`}
+                                onClick={(e) => { e.stopPropagation(); toggleSelection(video.id); }}
+                              >
+                                {selectedVideos.has(video.id) && <CheckIcon />}
+                              </div>
                               {/* File icon */}
                               <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-purple-500/20">
                                 <span className="text-lg">🎬</span>
@@ -734,6 +885,85 @@ export default function Dashboard() {
             </Button>
             <Button onClick={confirmDelete} className="bg-red-600 hover:bg-red-500 text-white">
               Delete Video
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Bulk Delete Confirmation Modal */}
+      <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-white flex items-center gap-2">
+              <span className="text-red-400">⚠️</span> Delete Multiple Videos
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Are you sure you want to delete <span className="text-white font-medium">{selectedVideos.size} videos</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-zinc-500 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            This action cannot be undone. Selected videos will be removed from your database and from YouTube if uploaded.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Cancel
+            </Button>
+            <Button onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-500 text-white">
+              Delete All {selectedVideos.size} Videos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Drive Preview Modal */}
+      <Dialog open={drivePreviewOpen} onOpenChange={setDrivePreviewOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-white flex items-center gap-2">
+              <FolderIcon /> Drive Files Preview
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Files found in the configured Google Drive folder.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto min-h-[300px] border border-zinc-800 rounded-lg bg-zinc-950/50 p-4">
+            {isPreviewLoading ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2">
+                <RefreshIcon spinning />
+                <p className="text-zinc-500 text-sm">Scanning Drive...</p>
+              </div>
+            ) : driveFiles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <p className="text-zinc-500">No files found or unable to access folder.</p>
+                <p className="text-zinc-600 text-xs mt-1">Check permissions and folder link.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {driveFiles.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800/50 rounded-lg hover:border-zinc-700 transition-colors group">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-8 h-8 bg-zinc-800 rounded flex items-center justify-center text-zinc-400">
+                        <PlayIcon />
+                      </div>
+                      <span className="text-sm text-zinc-300 truncate font-medium">{file.name}</span>
+                    </div>
+                    <a 
+                      href={file.driveUrl} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="px-3 py-1.5 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md hover:bg-blue-500/20 transition-colors flex items-center gap-1"
+                    >
+                      <EyeIcon /> View/Play
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={() => setDrivePreviewOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-white">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
