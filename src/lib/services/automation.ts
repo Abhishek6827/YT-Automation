@@ -86,7 +86,7 @@ export async function runAutomation(
     driveFolderLink: string,
     limit: number = 1,
     uploadHour: number = 10,
-    draftOnly: boolean = false
+    draftOnly: boolean = false  // New: If true, only create drafts with AI metadata
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -148,40 +148,28 @@ export async function runAutomation(
             // So logic inside getNextScheduleTime is correct.
 
             try {
-                // Create pending record in database
+                // Generate metadata using AI first
+                const metadata = await generateVideoMetadata(file.name);
+
+                // Create record in database
                 const videoRecord = await prisma.video.create({
                     data: {
                         driveId: file.id,
                         fileName: file.name,
-                        status: 'PROCESSING',
-                        scheduledFor: scheduleTime, // Save intent
-                    },
-                });
-
-                // Generate metadata using AI
-                const metadata = await generateVideoMetadata(file.name);
-
-                // Update record with metadata
-                await prisma.video.update({
-                    where: { id: videoRecord.id },
-                    data: {
+                        status: draftOnly ? 'DRAFT' : 'PROCESSING',
                         title: metadata.title,
                         description: metadata.description,
                         tags: metadata.tags.join(','),
-                        status: draftOnly ? 'DRAFT' : 'PROCESSING',
+                        scheduledFor: draftOnly ? null : scheduleTime,
                     },
                 });
 
-                // If Draft Mode, stop here
+                // If draftOnly, stop here - don't download or upload
                 if (draftOnly) {
-                    result.processed++; // Count as processed
-                    // result.details.push... logic needs to be added, but let's just push to details effectively
                     result.details.push({
                         fileName: file.name,
-                        status: 'skipped', // or 'draft'
+                        status: 'skipped',
                     });
-                    // We need to increment 'processed' but we already did at start of loop.
-                    // The loop continues.
                     continue;
                 }
 

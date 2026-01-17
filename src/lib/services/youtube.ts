@@ -109,16 +109,47 @@ export async function getChannelInfo(accessToken: string) {
     }
 }
 
-// Delete video from YouTube
-export async function deleteVideo(accessToken: string, videoId: string) {
+// Delete a video from YouTube
+export async function deleteVideo(accessToken: string, videoId: string): Promise<{ success: boolean; error?: string }> {
     try {
         const youtube = createYouTubeClient(accessToken);
-        await youtube.videos.delete({
-            id: videoId
-        });
-        return true;
+        await youtube.videos.delete({ id: videoId });
+        return { success: true };
     } catch (error) {
-        console.error('Error deleting Youtube video:', error);
-        throw error;
+        console.error('YouTube delete error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to delete video',
+        };
+    }
+}
+
+// Update video metadata on YouTube
+export async function updateVideoMetadata(
+    accessToken: string,
+    videoId: string,
+    metadata: { title: string; description: string; tags: string[] }
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const youtube = createYouTubeClient(accessToken);
+        await youtube.videos.update({
+            part: ['snippet'],
+            requestBody: {
+                id: videoId,
+                snippet: {
+                    title: metadata.title,
+                    description: metadata.description,
+                    tags: metadata.tags,
+                    categoryId: '22',
+                },
+            },
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('YouTube update error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to update video',
+        };
     }
 }

@@ -61,20 +61,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
         }
 
-        // Parse body for options
+        // Parse request body for draftOnly flag
         let draftOnly = false;
         try {
             const body = await req.json();
-            if (typeof body.draftOnly === 'boolean') {
-                draftOnly = body.draftOnly;
-            }
-        } catch (e) {
-            // No body or invalid JSON, ignore
+            draftOnly = body?.draftOnly === true;
+        } catch {
+            // No body or invalid JSON - that's fine, default to false
         }
 
         // Run automation
-        // If Cron context, we might want to respect different limits? 
-        // For now, use settings.
         const result = await runAutomation(
             accessToken,
             settings.driveFolderLink,

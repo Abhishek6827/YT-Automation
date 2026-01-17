@@ -1,11 +1,11 @@
 import { auth } from '@/auth';
-import { prisma } from '@/lib/db';
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
+import { prisma } from '@/lib/db';
+import { deleteVideo, updateVideoMetadata } from '@/lib/services/youtube';
 
 export const dynamic = 'force-dynamic';
 
-// DELETE /api/videos/[id] - Delete a video
+// DELETE /api/videos/[id] - Delete video from DB and optionally from YouTube
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -15,37 +15,26 @@ export async function DELETE(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    try {
-        const { id } = await params;
-        const video = await prisma.video.findUnique({
-            where: { id },
-        });
+    const { id } = await params;
 
+    try {
+        // Find the video first
+        const video = await prisma.video.findUnique({ where: { id } });
         if (!video) {
             return NextResponse.json({ error: 'Video not found' }, { status: 404 });
         }
 
-        // If uploaded to YouTube, try to delete it there too
+        // If it was uploaded to YouTube, delete it there too
         if (video.youtubeId) {
-            try {
-                const authClient = new google.auth.OAuth2();
-                authClient.setCredentials({ access_token: session.accessToken });
-                const youtube = google.youtube({ version: 'v3', auth: authClient });
-
-                await youtube.videos.delete({
-                    id: video.youtubeId,
-                });
-                console.log(`Deleted video ${video.youtubeId} from YouTube`);
-            } catch (ytError) {
-                console.error('Failed to delete from YouTube:', ytError);
-                // Continue to delete from DB even if YT fails (or maybe it was already deleted)
+            const ytResult = await deleteVideo(session.accessToken, video.youtubeId);
+            if (!ytResult.success) {
+                console.error('Failed to delete from YouTube:', ytResult.error);
+                // Continue anyway to remove from our DB
             }
         }
 
-        // Delete from Database
-        await prisma.video.delete({
-            where: { id },
-        });
+        // Delete from database
+        await prisma.video.delete({ where: { id } });
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -64,26 +53,40 @@ export async function PATCH(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+    const body = await request.json();
+
     try {
-        const { id } = await params;
-        const body = await request.json();
+        const video = await prisma.video.findUnique({ where: { id } });
+        if (!video) {
+            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+        }
 
-        // Allowed fields to update
-        const { title, description, tags, status } = body;
+        // Update in our database
+        const updateData: { title?: string; description?: string; tags?: string; status?: string } = {};
+        if (body.title !== undefined) updateData.title = body.title;
+        if (body.description !== undefined) updateData.description = body.description;
+        if (body.tags !== undefined) updateData.tags = body.tags;
+        if (body.status !== undefined) updateData.status = body.status;
 
-        // Validation could be added here
-
-        const video = await prisma.video.update({
+        const updated = await prisma.video.update({
             where: { id },
-            data: {
-                title,
-                description,
-                tags,
-                status, // e.g. change DRAFT to PENDING
-            },
+            data: updateData,
         });
 
-        return NextResponse.json(video);
+        // If video is already on YouTube, update it there too
+        if (video.youtubeId && (body.title || body.description || body.tags)) {
+            const ytResult = await updateVideoMetadata(session.accessToken, video.youtubeId, {
+                title: body.title || video.title || video.fileName,
+                description: body.description || video.description || '',
+                tags: (body.tags || video.tags || '').split(',').filter(Boolean),
+            });
+            if (!ytResult.success) {
+                console.error('Failed to update on YouTube:', ytResult.error);
+            }
+        }
+
+        return NextResponse.json(updated);
     } catch (error) {
         console.error('Update error:', error);
         return NextResponse.json({ error: 'Failed to update video' }, { status: 500 });

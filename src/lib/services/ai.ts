@@ -57,12 +57,27 @@ Only respond with valid JSON.`;
         const metadata = JSON.parse(jsonMatch[0]) as VideoMetadata;
 
         // Validate and sanitize
+        // YouTube allows max 500 characters TOTAL for all tags combined
+        let tags = Array.isArray(metadata.tags)
+            ? metadata.tags.map(t => String(t).trim().replace(/^#/, '')) // Remove # prefix if present
+            : [];
+
+        // Enforce 500 char total limit
+        let totalChars = 0;
+        const limitedTags: string[] = [];
+        for (const tag of tags) {
+            if (totalChars + tag.length + 1 <= 500) { // +1 for comma separator
+                limitedTags.push(tag);
+                totalChars += tag.length + 1;
+            } else {
+                break;
+            }
+        }
+
         return {
             title: (metadata.title || fileName).slice(0, 100),
             description: (metadata.description || '').slice(0, 5000),
-            tags: Array.isArray(metadata.tags)
-                ? metadata.tags.slice(0, 10).map(t => String(t).slice(0, 30))
-                : [],
+            tags: limitedTags,
         };
     } catch (error) {
         console.error('Error generating metadata:', error);
