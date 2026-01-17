@@ -37,16 +37,38 @@ export async function listVideosFromFolder(
     accessToken: string,
     folderId: string
 ): Promise<DriveFile[]> {
+    console.log(`[Drive] Listing videos from folder: ${folderId}`);
     const drive = createDriveClient(accessToken);
 
-    const response = await drive.files.list({
-        q: `'${folderId}' in parents and (mimeType contains 'video/')`,
-        fields: 'files(id, name, mimeType, size, createdTime)',
-        orderBy: 'createdTime desc',
-        pageSize: 100,
-    });
+    try {
+        const response = await drive.files.list({
+            q: `'${folderId}' in parents and (mimeType contains 'video/') and trashed = false`,
+            fields: 'files(id, name, mimeType, size, createdTime)',
+            orderBy: 'createdTime desc',
+            pageSize: 100,
+        });
 
-    return (response.data.files || []) as DriveFile[];
+        const files = (response.data.files || []) as DriveFile[];
+        console.log(`[Drive] Found ${files.length} video files`);
+
+        if (files.length === 0) {
+            // Debug: Check if there are ANY files
+            const allFiles = await drive.files.list({
+                q: `'${folderId}' in parents and trashed = false`,
+                pageSize: 10,
+                fields: 'files(id, name, mimeType)',
+            });
+            console.log(`[Drive] Debug: Found ${allFiles.data.files?.length || 0} total files (any type) in folder`);
+            if (allFiles.data.files && allFiles.data.files.length > 0) {
+                console.log('[Drive] Sample file MimeTypes:', allFiles.data.files.map(f => `${f.name}: ${f.mimeType}`));
+            }
+        }
+
+        return files;
+    } catch (error) {
+        console.error('[Drive] Error listing files:', error);
+        throw error;
+    }
 }
 
 // Download a file from Drive
