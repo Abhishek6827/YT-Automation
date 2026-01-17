@@ -144,11 +144,30 @@ export default function Dashboard() {
         method: 'POST',
       });
       const data = await res.json();
-      setLastResult(data);
-      fetchVideos();
-      fetchStatus();
+      
+      if (!res.ok) {
+        // If API returns an error, set it in the result state so we can show it
+        setLastResult({
+          processed: 0,
+          uploaded: 0,
+          failed: 0,
+          errors: [data.error || 'Failed to run automation'],
+          details: []
+        });
+      } else {
+        setLastResult(data);
+        fetchVideos();
+        fetchStatus();
+      }
     } catch (error) {
       console.error('Error running automation:', error);
+      setLastResult({
+        processed: 0,
+        uploaded: 0,
+        failed: 0,
+        errors: ['An unexpected error occurred'],
+        details: []
+      });
     }
     setIsRunning(false);
   };
@@ -378,7 +397,7 @@ export default function Dashboard() {
                           Failed: <span className="text-red-400 font-medium">{lastResult.failed}</span>
                         </span>
                       </div>
-                      {lastResult.errors.length > 0 && (
+                      {lastResult.errors?.length > 0 && (
                         <div className="text-sm text-red-400">
                           {lastResult.errors.map((err, i) => (
                             <p key={i}>• {err}</p>
