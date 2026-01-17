@@ -1,10 +1,26 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { PrismaClient } from '@/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
+// Lazy initialization - Prisma client is only created when first accessed
 const globalForPrisma = globalThis as unknown as {
-    prisma: InstanceType<typeof PrismaClient> | undefined;
+    prisma: PrismaClient | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? new (PrismaClient as any)();
+function createPrismaClient() {
+    return new PrismaClient();
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// Export a getter function instead of the client directly
+// This prevents connection during module import (build time)
+export function getPrisma(): PrismaClient {
+    if (!globalForPrisma.prisma) {
+        globalForPrisma.prisma = createPrismaClient();
+    }
+    return globalForPrisma.prisma;
+}
+
+// For backwards compatibility, also export prisma as a getter
+export const prisma = new Proxy({} as PrismaClient, {
+    get(_, prop) {
+        return getPrisma()[prop as keyof PrismaClient];
+    },
+});
