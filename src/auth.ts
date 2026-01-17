@@ -16,8 +16,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         'openid',
                         'email',
                         'profile',
+                        'https://www.googleapis.com/auth/youtube',  // Full YouTube access (includes delete)
                         'https://www.googleapis.com/auth/youtube.upload',
-                        'https://www.googleapis.com/auth/youtube.readonly',
                         'https://www.googleapis.com/auth/drive.readonly',
                     ].join(' '),
                     access_type: 'offline',
