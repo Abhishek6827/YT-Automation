@@ -16,6 +16,7 @@ export interface UploadVideoParams {
     description: string;
     tags: string[];
     privacyStatus?: 'private' | 'unlisted' | 'public';
+    publishAt?: string; // ISO 8601 date-time string
     categoryId?: string;
 }
 
@@ -35,6 +36,7 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
         tags,
         privacyStatus = 'private', // Default to private for safety
         categoryId = '22', // Entertainment category
+        publishAt,
     } = params;
 
     try {
@@ -50,7 +52,8 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
                     categoryId,
                 },
                 status: {
-                    privacyStatus,
+                    privacyStatus: publishAt ? 'private' : privacyStatus,
+                    publishAt,
                     selfDeclaredMadeForKids: false,
                 },
             },

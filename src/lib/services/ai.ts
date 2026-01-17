@@ -21,19 +21,27 @@ export async function generateVideoMetadata(
 
 Based on the video file name: "${fileName}"
 
+You are an expert YouTube Strategist specializing in Viral Shorts. Your goal is to maximize CTR (Click Through Rate) and Retention.
+
+Analyze the likely content from the filename and generate metadata that triggers curiosity, emotion, or shock.
+
 Generate the following in JSON format:
 {
-  "title": "An engaging, SEO-friendly title (max 100 chars)",
-  "description": "A compelling description with relevant keywords (200-500 chars). Include call to action.",
-  "tags": ["array", "of", "relevant", "tags", "max 10 tags"]
+  "title": "A viral, punchy title (max 60 chars). Use CAPS for emphasis but don't overdo it. No clickbait that lies.",
+  "description": "A compelling description (3-4 lines). Start with a hook. ends with: \\n\\nSUBSCRIBE for more!\\n#shorts #viral #trending #[TopicRelatedTag]",
+  "tags": ["shorts", "viral", "fyp", "trending", "plus 5-10 specific niche tags"]
 }
 
-Rules:
-- Title should be catchy and include keywords
-- Description should be engaging and include relevant hashtags at the end
-- Tags should be relevant trending keywords
-- Make it suitable for YouTube's algorithm
-- Only respond with valid JSON, no other text`;
+Guidelines for Title:
+- Under 60 characters is best for Shorts.
+- Use strong verbs and emotional triggers.
+- Example: "You Won't Believe This!", "Satisfying Art 🎨", "He Actually Did It..."
+
+Guidelines for Description:
+- First line must be the hook.
+- Include relevant hashtags.
+
+Only respond with valid JSON.`;
 
     try {
         const result = await model.generateContent(prompt);

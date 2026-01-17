@@ -5,11 +5,50 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// POST /api/automation/run - Run automation manually
-export async function POST() {
-    const session = await auth();
-    if (!session?.accessToken) {
-        return NextResponse.json({ error: 'Unauthorized - Please sign in with Google' }, { status: 401 });
+// POST /api/automation/run - Run automation manually or via Cron
+export async function POST(req: Request) {
+    let accessToken: string | undefined;
+
+    // Check if triggered by Cron (Vercel Cron)
+    // Vercel sends `Authorization: Bearer <CRON_SECRET>` if configured.
+    // Ideally we check common cron headers
+    const authHeader = req.headers.get('authorization');
+    const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+    if (isCron) {
+        console.log('Cron job execution triggered');
+        // Fetch the first user account with Google provider to get refresh token
+        // In a single-user app, this is the admin.
+        const account = await prisma.account.findFirst({
+            where: { provider: 'google' },
+        });
+
+        if (!account?.refresh_token) {
+            return NextResponse.json({ error: 'No google account with refresh token found' }, { status: 401 });
+        }
+
+        // Refresh the token
+        try {
+            const { google } = await import('googleapis');
+            const authClient = new google.auth.OAuth2(
+                process.env.GOOGLE_CLIENT_ID,
+                process.env.GOOGLE_CLIENT_SECRET
+            );
+            authClient.setCredentials({ refresh_token: account.refresh_token });
+            const { credentials } = await authClient.refreshAccessToken();
+            accessToken = credentials.access_token || undefined;
+        } catch (error) {
+            console.error('Failed to refresh token for cron:', error);
+            return NextResponse.json({ error: 'Failed to refresh token' }, { status: 500 });
+        }
+    } else {
+        // User session
+        const session = await auth();
+        accessToken = session?.accessToken;
+    }
+
+    if (!accessToken) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
@@ -23,10 +62,13 @@ export async function POST() {
         }
 
         // Run automation
+        // If Cron context, we might want to respect different limits? 
+        // For now, use settings.
         const result = await runAutomation(
-            session.accessToken,
+            accessToken,
             settings.driveFolderLink,
-            settings.videosPerDay
+            settings.videosPerDay,
+            settings.uploadHour
         );
 
         return NextResponse.json(result);

@@ -17,10 +17,75 @@ export interface AutomationResult {
 }
 
 // Main automation function - scans Drive, generates metadata, uploads to YouTube
+// Helper to getting next schedule time
+async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Promise<Date> {
+    // Get the last scheduled video
+    const lastScheduled = await prisma.video.findFirst({
+        where: {
+            scheduledFor: {
+                not: null
+            }
+        },
+        orderBy: {
+            scheduledFor: 'desc'
+        }
+    });
+
+    let baseDate = new Date();
+
+    // If we have a scheduled video, check if we can fit more on that day
+    if (lastScheduled?.scheduledFor) {
+        const lastDate = new Date(lastScheduled.scheduledFor);
+
+        // Count videos scheduled for that specific date
+        const startOfLastDate = new Date(lastDate);
+        startOfLastDate.setHours(0, 0, 0, 0);
+
+        const endOfLastDate = new Date(lastDate);
+        endOfLastDate.setHours(23, 59, 59, 999);
+
+        const countOnLastDate = await prisma.video.count({
+            where: {
+                scheduledFor: {
+                    gte: startOfLastDate,
+                    lte: endOfLastDate
+                }
+            }
+        });
+
+        if (countOnLastDate < videosPerDay) {
+            // We can still schedule for this day
+            baseDate = lastDate;
+        } else {
+            // Move to next day
+            baseDate = new Date(lastDate);
+            baseDate.setDate(baseDate.getDate() + 1);
+        }
+    } else {
+        // No previously scheduled videos. Start from effective "Tomorrow" if current time > upload hour?
+        // Or just today if we haven't passed upload hour?
+        // User wants "Schedule". Usually means future. 
+        // Let's default to Tomorrow @ UploadHour to be safe, or Today if hour is available.
+        // Current logic: Just set hours.
+        const now = new Date();
+        baseDate.setHours(uploadHour, 0, 0, 0);
+
+        if (baseDate <= now) {
+            baseDate.setDate(baseDate.getDate() + 1);
+        }
+    }
+
+    // Ensure strict hour setting (in case baseDate was shifted)
+    baseDate.setHours(uploadHour, 0, 0, 0);
+
+    return baseDate;
+}
+
 export async function runAutomation(
     accessToken: string,
     driveFolderLink: string,
-    limit: number = 1 // How many videos to process at once
+    limit: number = 1,
+    uploadHour: number = 10
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -66,6 +131,21 @@ export async function runAutomation(
         for (const file of filesToProcess) {
             result.processed++;
 
+            // Calculate Schedule Time
+            // We re-calculate for EACH file to handle the increment logic correctly
+            // (getNextScheduleTime queries DB, but we haven't saved the record yet?)
+            // Wait, we need to save the record or pass the previous date.
+            // Better: Calculate in loop.
+            // Actually, querying DB inside loop is slow but safe.
+            // But we insert the record as PROCESSING first.
+            // Let's determine schedule time BEFORE processing loop?
+            // No, strictly sequential. 
+
+            const scheduleTime = await getNextScheduleTime(uploadHour, limit); // Pass limit as videosPerDay approx?
+            // Wait, getNextScheduleTime uses 'limit' as 'videosPerDay'? 
+            // In route.ts, limit PASSED IS settings.videosPerDay.
+            // So logic inside getNextScheduleTime is correct.
+
             try {
                 // Create pending record in database
                 const videoRecord = await prisma.video.create({
@@ -73,6 +153,7 @@ export async function runAutomation(
                         driveId: file.id,
                         fileName: file.name,
                         status: 'PROCESSING',
+                        scheduledFor: scheduleTime, // Save intent
                     },
                 });
 
@@ -100,6 +181,7 @@ export async function runAutomation(
                     description: metadata.description,
                     tags: metadata.tags,
                     privacyStatus: 'private', // Start with private for safety
+                    publishAt: scheduleTime.toISOString(), // Schedule it!
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {
@@ -107,9 +189,10 @@ export async function runAutomation(
                     await prisma.video.update({
                         where: { id: videoRecord.id },
                         data: {
-                            status: 'UPLOADED',
+                            status: 'UPLOADED', // Or SCHEDULED?
                             youtubeId: uploadResult.videoId,
                             uploadedAt: new Date(),
+                            scheduledFor: scheduleTime,
                         },
                     });
 
@@ -123,9 +206,7 @@ export async function runAutomation(
                     // Update record with failure
                     await prisma.video.update({
                         where: { id: videoRecord.id },
-                        data: {
-                            status: 'FAILED',
-                        },
+                        data: { status: 'FAILED' },
                     });
 
                     result.failed++;
