@@ -9,7 +9,7 @@ export async function GET() {
     try {
         const videos = await prisma.video.findMany({
             orderBy: { createdAt: 'desc' },
-            take: 10000,
+            take: 1000,
         });
 
         return NextResponse.json(videos);
