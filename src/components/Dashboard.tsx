@@ -110,6 +110,9 @@ export default function Dashboard() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  // Delete Confirmation Modal State
+  const [deleteConfirmVideo, setDeleteConfirmVideo] = useState<Video | null>(null);
+
   // Fetch functions
   const fetchSettings = useCallback(async () => {
     try {
@@ -197,8 +200,10 @@ export default function Dashboard() {
     setIsRunning(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this video? This removes it from YouTube (if uploaded) and the database.')) return;
+  const confirmDelete = async () => {
+    if (!deleteConfirmVideo) return;
+    const id = deleteConfirmVideo.id;
+    setDeleteConfirmVideo(null);
     setIsDeleting(id);
     try {
       const res = await fetch(`/api/videos/${id}`, { method: 'DELETE' });
@@ -585,7 +590,7 @@ export default function Dashboard() {
                                 <Button variant="ghost" size="sm" onClick={() => openEditModal(video)} className="text-zinc-400 hover:text-white h-8 w-8 p-0">
                                   <EditIcon />
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={() => handleDelete(video.id)} disabled={isDeleting === video.id} className="text-zinc-400 hover:text-red-400 h-8 w-8 p-0">
+                                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmVideo(video)} disabled={isDeleting === video.id} className="text-zinc-400 hover:text-red-400 h-8 w-8 p-0">
                                   {isDeleting === video.id ? <RefreshIcon spinning /> : <TrashIcon />}
                                 </Button>
                               </div>
@@ -632,7 +637,7 @@ export default function Dashboard() {
                                 <Button size="sm" onClick={() => approveVideo(video)} className="bg-emerald-600 hover:bg-emerald-500 text-white h-8">
                                   Approve
                                 </Button>
-                                <Button size="sm" variant="ghost" onClick={() => handleDelete(video.id)} disabled={isDeleting === video.id} className="text-zinc-400 hover:text-red-400 h-8 w-8 p-0">
+                                <Button size="sm" variant="ghost" onClick={() => setDeleteConfirmVideo(video)} disabled={isDeleting === video.id} className="text-zinc-400 hover:text-red-400 h-8 w-8 p-0">
                                   {isDeleting === video.id ? <RefreshIcon spinning /> : <TrashIcon />}
                                 </Button>
                               </div>
@@ -697,6 +702,31 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setEditingVideo(null)} className="border-zinc-700 text-zinc-300">Cancel</Button>
             <Button onClick={() => saveEdit(false)} disabled={isSavingEdit} className="bg-zinc-700 hover:bg-zinc-600 text-white">Save Draft</Button>
             <Button onClick={() => saveEdit(true)} disabled={isSavingEdit} className="bg-emerald-600 hover:bg-emerald-500 text-white">Save & Approve</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deleteConfirmVideo} onOpenChange={(open) => !open && setDeleteConfirmVideo(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-white flex items-center gap-2">
+              <span className="text-red-400">⚠️</span> Delete Video
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Are you sure you want to delete <span className="text-white font-medium">&ldquo;{deleteConfirmVideo?.title || deleteConfirmVideo?.fileName}&rdquo;</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-zinc-500 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            This action cannot be undone. The video will be removed from your database and from YouTube if it was uploaded.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmVideo(null)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Cancel
+            </Button>
+            <Button onClick={confirmDelete} className="bg-red-600 hover:bg-red-500 text-white">
+              Delete Video
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
