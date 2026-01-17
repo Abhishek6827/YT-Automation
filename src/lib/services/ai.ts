@@ -17,31 +17,39 @@ export async function generateVideoMetadata(
 
     const basePrompt = customPrompt || `You are a YouTube content creator assistant. Generate engaging metadata for a video.`;
 
-    const prompt = `${basePrompt}
+    const prompt = `You are a TOP YouTube Shorts creator with 10M+ subscribers. Your videos go VIRAL because of amazing titles.
 
-Based on the video file name: "${fileName}"
+TASK: Generate viral YouTube Shorts metadata.
 
-You are an expert YouTube Strategist specializing in Viral Shorts. Your goal is to maximize CTR (Click Through Rate) and Retention.
+VIDEO FILENAME: "${fileName}"
 
-Analyze the likely content from the filename and generate metadata that triggers curiosity, emotion, or shock.
+IMPORTANT RULES:
+1. The filename might be generic (like "video_001.mp4" or "subtitle (5).mp4"). DO NOT use the filename literally as title.
+2. Instead, CREATE an original, catchy, curiosity-inducing title as if YOU made this viral short.
+3. Think: What makes people click? Mystery, emotion, surprise, relatability, humor.
 
-Generate the following in JSON format:
+Generate JSON with:
 {
-  "title": "A viral, punchy title (max 60 chars). Use CAPS for emphasis but don't overdo it. No clickbait that lies.",
-  "description": "A compelling description (3-4 lines). Start with a hook. ends with: \\n\\nSUBSCRIBE for more!\\n#shorts #viral #trending #[TopicRelatedTag]",
-  "tags": ["shorts", "viral", "fyp", "trending", "plus 5-10 specific niche tags"]
+  "title": "VIRAL title (max 50 chars). Examples: 'Wait for it... 😱', 'Nobody Expected THIS 💀', 'POV: You finally did it ✨', 'This changes everything 🔥'",
+  "description": "Hook sentence + context + call to action. End with: SUBSCRIBE for more! Include 3-5 hashtags",
+  "tags": ["shorts", "viral", "fyp", "trending", "satisfying", "relatable", "pov", "mustwatch"]
 }
 
-Guidelines for Title:
-- Under 60 characters is best for Shorts.
-- Use strong verbs and emotional triggers.
-- Example: "You Won't Believe This!", "Satisfying Art 🎨", "He Actually Did It..."
+TITLE STYLES THAT WORK:
+- "Wait for it..." (builds suspense)
+- "POV: [relatable situation]" (personal)
+- "Nobody expected THIS" (surprise)
+- "When [situation] hits different" (relatable)
+- "He actually did it 💀" (reaction)
+- Use emojis: 😱💀🔥✨😭🤯
 
-Guidelines for Description:
-- First line must be the hook.
-- Include relevant hashtags.
+NEVER:
+- Use the raw filename as title
+- Say "english subtitle" or any technical terms
+- Be boring or generic
 
-Only respond with valid JSON.`;
+Output ONLY valid JSON.`;
+
 
     try {
         const result = await model.generateContent(prompt);
