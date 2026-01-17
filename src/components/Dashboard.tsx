@@ -550,8 +550,8 @@ export default function Dashboard() {
                       <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-700">
-                        {[1,2,3,5,10].map(n => <SelectItem key={n} value={String(n)}>{n} video{n>1?'s':''}/day</SelectItem>)}
+                      <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
+                        {[1, 3, 5, 10, 20, 50, 100, 500, 1000, 10000].map(n => <SelectItem key={n} value={String(n)}>{n} video{n>1?'s':''}/day</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

@@ -53,16 +53,23 @@ export async function listVideosFromFolder(
 
     try {
         // 1. Search for videos in current folder
-        const videoResponse = await drive.files.list({
-            q: `'${folderId}' in parents and (mimeType contains 'video/') and trashed = false`,
-            fields: 'files(id, name, mimeType, size, createdTime)',
-            orderBy: 'createdTime desc',
-            pageSize: 100,
-        });
+        let pageToken: string | undefined;
 
-        const videos = (videoResponse.data.files || []) as DriveFile[];
-        allVideos = [...videos];
-        console.log(`[Drive] Found ${videos.length} videos in folder ${folderId}`);
+        do {
+            const videoResponse = await drive.files.list({
+                q: `'${folderId}' in parents and (mimeType contains 'video/') and trashed = false`,
+                fields: 'nextPageToken, files(id, name, mimeType, size, createdTime)',
+                orderBy: 'createdTime desc',
+                pageSize: 1000, // Increase page size to 1000
+                pageToken,
+            });
+
+            const videos = (videoResponse.data.files || []) as DriveFile[];
+            allVideos = [...allVideos, ...videos];
+            pageToken = videoResponse.data.nextPageToken || undefined;
+        } while (pageToken);
+
+        console.log(`[Drive] Found ${allVideos.length} videos in folder ${folderId}`);
 
         // 2. Search for subfolders if depth limit not reached
         if (depth < maxDepth) {
