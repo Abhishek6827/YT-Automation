@@ -108,3 +108,17 @@ export async function getChannelInfo(accessToken: string) {
         return null;
     }
 }
+
+// Delete video from YouTube
+export async function deleteVideo(accessToken: string, videoId: string) {
+    try {
+        const youtube = createYouTubeClient(accessToken);
+        await youtube.videos.delete({
+            id: videoId
+        });
+        return true;
+    } catch (error) {
+        console.error('Error deleting Youtube video:', error);
+        throw error;
+    }
+}

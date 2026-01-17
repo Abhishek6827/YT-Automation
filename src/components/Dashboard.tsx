@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Video {
   id: string;
@@ -65,6 +67,11 @@ export default function Dashboard() {
   const [lastResult, setLastResult] = useState<AutomationResult | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Edit Modal State
+  const [editingVideo, setEditingVideo] = useState<Video | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', tags: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Fetch data on load
   useEffect(() => {
@@ -137,12 +144,14 @@ export default function Dashboard() {
     setIsSaving(false);
   };
 
-  const runAutomation = async () => {
+  const runAutomation = async (draftOnly: boolean = false) => {
     setIsRunning(true);
     setLastResult(null);
     try {
       const res = await fetch('/api/automation/run', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftOnly }), // Send draftOnly flag
       });
       const data = await res.json();
       
@@ -172,16 +181,74 @@ export default function Dashboard() {
     setIsRunning(false);
   };
 
+  const handleDelete = async (id: string) => {
+     if (!confirm('Are you sure you want to delete this video? This will remove it from the database and YouTube (if uploaded).')) return;
+     try {
+         await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+         fetchVideos();
+     } catch (e) {
+         console.error(e);
+     }
+  };
+
+  const openEditModal = (video: Video) => {
+      setEditingVideo(video);
+      setEditForm({
+          title: video.title || video.fileName,
+          description: video.description || '',
+          tags: video.tags || ''
+      });
+  };
+
+  const saveEdit = async (approve: boolean = false) => {
+      if (!editingVideo) return;
+      setIsSavingEdit(true);
+      try {
+          const res = await fetch(`/api/videos/${editingVideo.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  title: editForm.title,
+                  description: editForm.description,
+                  tags: editForm.tags,
+                  status: approve ? 'PENDING' : editingVideo.status
+              })
+          });
+          if (res.ok) {
+              setEditingVideo(null);
+              fetchVideos();
+          }
+      } catch (e) {
+          console.error(e);
+      }
+      setIsSavingEdit(false);
+  };
+  
+  const approveVideo = async (video: Video) => {
+      try {
+          await fetch(`/api/videos/${video.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'PENDING' })
+          });
+          fetchVideos();
+      } catch (e) { console.error(e); }
+  }
+
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'UPLOADED':
         return <Badge className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20">Uploaded</Badge>;
       case 'PROCESSING':
-        return <Badge className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20">Processing</Badge>;
+      case 'PENDING':
+        return <Badge className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20">Pending</Badge>;
+      case 'DRAFT':
+        return <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20">Draft</Badge>;
       case 'FAILED':
         return <Badge className="bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border-rose-500/20">Failed</Badge>;
       default:
-        return <Badge className="bg-slate-500/10 text-slate-500 hover:bg-slate-500/20 border-slate-500/20">Pending</Badge>;
+        return <Badge className="bg-slate-500/10 text-slate-500 hover:bg-slate-500/20 border-slate-500/20">Unknown</Badge>;
     }
   };
 
@@ -207,12 +274,6 @@ export default function Dashboard() {
               onClick={() => signIn('google')} 
               className="w-full bg-white text-zinc-900 hover:bg-zinc-200 font-medium h-12 text-base transition-all"
             >
-              <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
               Continue with Google
             </Button>
           </CardContent>
@@ -231,6 +292,9 @@ export default function Dashboard() {
   }
 
   // Logged in - Dashboard
+  const drafts = videos.filter(v => v.status === 'DRAFT');
+  const published = videos.filter(v => v.status !== 'DRAFT');
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Top Navigation */}
@@ -250,7 +314,7 @@ export default function Dashboard() {
               {channel && (
                 <div className="flex items-center gap-3 bg-zinc-800/50 rounded-full pl-2 pr-4 py-1.5 border border-zinc-700/50">
                   {channel.thumbnail ? (
-                    <img src={channel.thumbnail} alt={channel.title} className="w-6 h-6 rounded-full" />
+                    <img src={channel.thumbnail} alt={channel.title} referrerPolicy="no-referrer" className="w-6 h-6 rounded-full" />
                   ) : (
                      <div className="w-6 h-6 rounded-full bg-zinc-700"></div>
                   )}
@@ -353,12 +417,21 @@ export default function Dashboard() {
 
                 <div className="pt-4 space-y-3">
                   <Button 
-                    onClick={runAutomation}
+                    onClick={() => runAutomation(true)} // Default to Draft Mode
                     disabled={isRunning || !settings.driveFolderLink}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
                   >
-                    {isRunning ? 'Processing...' : 'Run Automation Batch'}
+                    {isRunning ? 'Scanning...' : 'Scan for Drafts'}
                   </Button>
+                  <Button 
+                    onClick={() => runAutomation(false)}
+                    disabled={isRunning || !settings.driveFolderLink}
+                    variant="secondary"
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium"
+                  >
+                     Run Immediate Upload
+                  </Button>
+                  
                   <Button 
                     onClick={saveSettings}
                     disabled={isSaving}
@@ -373,8 +446,8 @@ export default function Dashboard() {
                   <div className="rounded-lg bg-zinc-950/50 border border-zinc-800 p-4 text-sm space-y-2">
                     <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
                       <span className="font-medium text-zinc-400">Result</span>
-                      <span className={lastResult.failed > 0 ? "text-red-400" : "text-green-400"}>
-                        {lastResult.uploaded} Uploaded
+                      <span className={lastResult.failed > 0 ? "text-red-400" : "text-emerald-400"}>
+                        {lastResult.processed} Processed
                       </span>
                     </div>
                     {lastResult.errors.map((e, i) => (
@@ -386,97 +459,190 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Video History */}
+          {/* Video History & Drafts */}
           <div className="lg:col-span-2">
             <Card className="bg-zinc-900 border-zinc-800 h-full">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg text-white">Content Library</CardTitle>
-                  <CardDescription className="text-zinc-500">History of uploaded and scheduled videos</CardDescription>
+                  <CardDescription className="text-zinc-500">Manage drafts and published videos</CardDescription>
                 </div>
                 <Button variant="ghost" size="sm" onClick={fetchVideos} className="text-zinc-400">
                   Refresh
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[600px]">
-                  <Table>
-                    <TableHeader className="bg-zinc-950/50">
-                      <TableRow className="border-zinc-800 hover:bg-transparent">
-                        <TableHead className="w-[100px] text-zinc-400">Video</TableHead>
-                        <TableHead className="text-zinc-400">Title</TableHead>
-                        <TableHead className="text-zinc-400">Status</TableHead>
-                        <TableHead className="text-zinc-400 text-right">Date</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {videos.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-12 text-zinc-500">
-                            No videos found. Start by running the automation.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        videos.map((video) => (
-                          <TableRow key={video.id} className="border-zinc-800 hover:bg-zinc-800/30">
-                            <TableCell>
-                              <div className="w-20 h-12 bg-zinc-800 rounded overflow-hidden flex items-center justify-center relative group">
-                                {video.youtubeId ? (
-                                  <img 
-                                    src={`https://i.ytimg.com/vi/${video.youtubeId}/mqdefault.jpg`} 
-                                    className="w-full h-full object-cover"
-                                    alt="Thumbnail"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-zinc-600">No Img</span>
-                                )}
-                                <a 
-                                  href={`https://youtube.com/watch?v=${video.youtubeId}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                >
-                                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </a>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <p className="font-medium text-zinc-200 line-clamp-1">{video.title || video.fileName}</p>
-                                <p className="text-xs text-zinc-500 line-clamp-1">{video.driveId}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {getStatusBadge(video.status)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="space-y-1">
-                                <p className="text-sm text-zinc-300">
-                                  {video.scheduledFor 
-                                    ? new Date(video.scheduledFor).toLocaleDateString()
-                                    : (video.uploadedAt ? new Date(video.uploadedAt).toLocaleDateString() : '-')
-                                  }
-                                </p>
-                                {video.scheduledFor && (
-                                  <p className="text-xs text-amber-500">
-                                    {new Date(video.scheduledFor).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                  </p>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                  <Tabs defaultValue="published" className="w-full">
+                      <TabsList className="w-full rounded-none border-b border-zinc-800 bg-transparent p-0">
+                          <TabsTrigger value="published" className="flex-1 rounded-none border-b-2 border-transparent px-4 py-3 text-zinc-400 data-[state=active]:border-red-500 data-[state=active]:text-white">
+                              Published / Scheduled ({published.length})
+                          </TabsTrigger>
+                          <TabsTrigger value="drafts" className="flex-1 rounded-none border-b-2 border-transparent px-4 py-3 text-zinc-400 data-[state=active]:border-blue-500 data-[state=active]:text-white">
+                              Drafts ({drafts.length})
+                          </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="published" className="m-0">
+                          <ScrollArea className="h-[600px]">
+                              <Table>
+                                  <TableHeader className="bg-zinc-950/50">
+                                      <TableRow className="border-zinc-800 hover:bg-transparent">
+                                          <TableHead className="w-[100px] text-zinc-400">Video</TableHead>
+                                          <TableHead className="text-zinc-400">Title</TableHead>
+                                          <TableHead className="text-zinc-400">Status</TableHead>
+                                          <TableHead className="text-zinc-400 text-right">Actions</TableHead>
+                                      </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                      {published.length === 0 ? (
+                                          <TableRow>
+                                              <TableCell colSpan={4} className="text-center py-12 text-zinc-500">
+                                                  No published videos found.
+                                              </TableCell>
+                                          </TableRow>
+                                      ) : (
+                                          published.map((video) => (
+                                              <TableRow key={video.id} className="border-zinc-800 hover:bg-zinc-800/30">
+                                                  <TableCell> {/* ... existing thumbnail logic ... */}
+                                                      <div className="w-20 h-12 bg-zinc-800 rounded overflow-hidden flex items-center justify-center relative group">
+                                                         {video.youtubeId ? (
+                                                            <img 
+                                                              src={`https://i.ytimg.com/vi/${video.youtubeId}/mqdefault.jpg`} 
+                                                              className="w-full h-full object-cover"
+                                                              alt="Thumbnail"
+                                                            />
+                                                          ) : (
+                                                            <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-600">No Img</div>
+                                                          )}
+                                                          {video.youtubeId && (
+                                                              <a href={`https://youtube.com/watch?v=${video.youtubeId}`} target="_blank" className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                                                                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                              </a>
+                                                          )}
+                                                      </div>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                      <div className="space-y-1">
+                                                          <a href={`https://drive.google.com/file/d/${video.driveId}/view`} target="_blank" rel="noreferrer" className="font-medium text-zinc-200 line-clamp-1 hover:text-blue-400 hover:underline">
+                                                              {video.title || video.fileName}
+                                                          </a>
+                                                          <p className="text-xs text-zinc-500 line-clamp-1">{video.driveId}</p>
+                                                      </div>
+                                                  </TableCell>
+                                                  <TableCell>{getStatusBadge(video.status)}</TableCell>
+                                                  <TableCell className="text-right">
+                                                      <Button variant="ghost" size="sm" onClick={() => handleDelete(video.id)} className="text-zinc-500 hover:text-red-400">
+                                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                      </Button>
+                                                  </TableCell>
+                                              </TableRow>
+                                          ))
+                                      )}
+                                  </TableBody>
+                              </Table>
+                          </ScrollArea>
+                      </TabsContent>
+
+                      <TabsContent value="drafts" className="m-0">
+                          <ScrollArea className="h-[600px]">
+                              <Table>
+                                  <TableHeader className="bg-zinc-950/50">
+                                      <TableRow className="border-zinc-800 hover:bg-transparent">
+                                          <TableHead className="w-[100px] text-zinc-400">File</TableHead>
+                                          <TableHead className="text-zinc-400">AI Metadata</TableHead>
+                                          <TableHead className="text-zinc-400 text-right">Actions</TableHead>
+                                      </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                      {drafts.length === 0 ? (
+                                          <TableRow>
+                                              <TableCell colSpan={3} className="text-center py-12 text-zinc-500">
+                                                  No drafts found. Click "Scan for Drafts" to import videos.
+                                              </TableCell>
+                                          </TableRow>
+                                      ) : (
+                                          drafts.map((video) => (
+                                              <TableRow key={video.id} className="border-zinc-800 hover:bg-zinc-800/30">
+                                                  <TableCell>
+                                                      <div className="w-20 h-12 bg-zinc-800 rounded flex items-center justify-center text-xs text-zinc-500 overflow-hidden">
+                                                          {video.fileName.slice(-4)}
+                                                      </div>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                      <div className="space-y-1 max-w-md">
+                                                          <a href={`https://drive.google.com/file/d/${video.driveId}/view`} target="_blank" rel="noreferrer" className="font-medium text-zinc-200 line-clamp-1 hover:text-blue-400 hover:underline">
+                                                              {video.title || "Generating..."}
+                                                          </a>
+                                                          <p className="text-xs text-zinc-500 line-clamp-2">{video.description || "No description generated"}</p>
+                                                          <div className="flex gap-1 flex-wrap">
+                                                              {video.tags?.split(',').slice(0,3).map(t => (
+                                                                  <span key={t} className="text-[10px] bg-zinc-800 text-zinc-400 px-1 rounded">#{t}</span>
+                                                              ))}
+                                                          </div>
+                                                      </div>
+                                                  </TableCell>
+                                                  <TableCell className="text-right">
+                                                      <div className="flex justify-end gap-2">
+                                                          <Button size="sm" variant="secondary" onClick={() => openEditModal(video)}>Edit</Button>
+                                                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveVideo(video)}>Approve</Button>
+                                                          <Button size="sm" variant="ghost" className="text-zinc-500 hover:text-red-400" onClick={() => handleDelete(video.id)}>
+                                                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                          </Button>
+                                                      </div>
+                                                  </TableCell>
+                                              </TableRow>
+                                          ))
+                                      )}
+                                  </TableBody>
+                              </Table>
+                          </ScrollArea>
+                      </TabsContent>
+                  </Tabs>
               </CardContent>
             </Card>
           </div>
         </div>
       </main>
+
+      {/* Edit Modal */}
+      <Dialog open={!!editingVideo} onOpenChange={(open) => !open && setEditingVideo(null)}>
+          <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-xl">
+              <DialogHeader>
+                  <DialogTitle>Edit Video Details</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                      <Label>Video Title</Label>
+                      <Input 
+                          value={editForm.title} 
+                          onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                          className="bg-zinc-950 border-zinc-700"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label>Description</Label>
+                      <Textarea 
+                          value={editForm.description} 
+                          onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                          className="bg-zinc-950 border-zinc-700 h-32"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label>Tags (comma separated)</Label>
+                      <Input 
+                          value={editForm.tags} 
+                          onChange={(e) => setEditForm({...editForm, tags: e.target.value})}
+                          className="bg-zinc-950 border-zinc-700"
+                      />
+                  </div>
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditingVideo(null)} className="border-zinc-700 text-zinc-300">Cancel</Button>
+                  <Button onClick={() => saveEdit(false)} disabled={isSavingEdit} className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Save Draft</Button>
+                  <Button onClick={() => saveEdit(true)} disabled={isSavingEdit} className="bg-emerald-600 hover:bg-emerald-700 text-white">Save & Approve</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }

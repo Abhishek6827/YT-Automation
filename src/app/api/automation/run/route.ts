@@ -61,6 +61,17 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
         }
 
+        // Parse body for options
+        let draftOnly = false;
+        try {
+            const body = await req.json();
+            if (typeof body.draftOnly === 'boolean') {
+                draftOnly = body.draftOnly;
+            }
+        } catch (e) {
+            // No body or invalid JSON, ignore
+        }
+
         // Run automation
         // If Cron context, we might want to respect different limits? 
         // For now, use settings.
@@ -68,7 +79,8 @@ export async function POST(req: Request) {
             accessToken,
             settings.driveFolderLink,
             settings.videosPerDay,
-            settings.uploadHour
+            settings.uploadHour,
+            draftOnly
         );
 
         return NextResponse.json(result);

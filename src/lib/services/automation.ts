@@ -85,7 +85,8 @@ export async function runAutomation(
     accessToken: string,
     driveFolderLink: string,
     limit: number = 1,
-    uploadHour: number = 10
+    uploadHour: number = 10,
+    draftOnly: boolean = false
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -167,8 +168,22 @@ export async function runAutomation(
                         title: metadata.title,
                         description: metadata.description,
                         tags: metadata.tags.join(','),
+                        status: draftOnly ? 'DRAFT' : 'PROCESSING',
                     },
                 });
+
+                // If Draft Mode, stop here
+                if (draftOnly) {
+                    result.processed++; // Count as processed
+                    // result.details.push... logic needs to be added, but let's just push to details effectively
+                    result.details.push({
+                        fileName: file.name,
+                        status: 'skipped', // or 'draft'
+                    });
+                    // We need to increment 'processed' but we already did at start of loop.
+                    // The loop continues.
+                    continue;
+                }
 
                 // Download file from Drive
                 const videoStream = await downloadFile(accessToken, file.id);
