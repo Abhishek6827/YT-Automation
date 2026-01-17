@@ -561,8 +561,16 @@ export default function Dashboard() {
                                       src={`https://i.ytimg.com/vi/${video.youtubeId}/mqdefault.jpg`} 
                                       className="w-full h-full object-cover"
                                       alt=""
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                      onError={(e) => { 
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        const fallback = target.nextElementSibling;
+                                        if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                      }}
                                     />
+                                    <div className="w-full h-full items-center justify-center text-zinc-500 text-xs absolute inset-0 bg-zinc-800" style={{display: 'none'}}>
+                                      <PlayIcon />
+                                    </div>
                                     <a href={`https://youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
                                       <PlayIcon />
                                     </a>
