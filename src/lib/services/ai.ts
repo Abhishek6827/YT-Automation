@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Note: GoogleGenerativeAI is instantiated per-call to ensure runtime env vars are used
 
 export interface VideoMetadata {
     title: string;
@@ -13,6 +13,19 @@ export async function generateVideoMetadata(
     fileName: string,
     customPrompt?: string
 ): Promise<VideoMetadata> {
+    // Check API key at call time
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error('[AI] GEMINI_API_KEY is not set!');
+        return {
+            title: `[AI Failed] ${fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ').trim()}`.slice(0, 100),
+            description: `Check out this video!\n\n#shorts #viral #trending`,
+            tags: ['shorts', 'viral', 'trending', 'video'],
+        };
+    }
+
+    console.log(`[AI] Generating metadata for: ${fileName}, API key length: ${apiKey.length}`);
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // Add randomization elements for unique generation
@@ -99,8 +112,16 @@ Output ONLY valid JSON. Be creative and UNIQUE!`;
             tags: limitedTags,
         };
     } catch (error) {
-        console.error('Error generating metadata:', error);
-        console.error('GEMINI_API_KEY set:', !!process.env.GEMINI_API_KEY);
+        // Detailed error logging for debugging
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : '';
+        console.error('[AI] Error generating metadata:', {
+            message: errorMessage,
+            stack: errorStack?.slice(0, 500),
+            apiKeySet: !!process.env.GEMINI_API_KEY,
+            apiKeyLength: process.env.GEMINI_API_KEY?.length || 0,
+            fileName: fileName
+        });
 
         // Fallback metadata - include [AI FAILED] prefix to indicate fallback
         const cleanName = fileName
@@ -121,6 +142,15 @@ export async function generateMetadataFromTranscript(
     transcript: string,
     fileName: string
 ): Promise<VideoMetadata> {
+    // Check API key at call time
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error('[AI] GEMINI_API_KEY is not set!');
+        return generateVideoMetadata(fileName); // Fallback to filename-based
+    }
+
+    console.log(`[AI] Generating metadata from transcript, length: ${transcript.length}`);
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // Add randomization for variety
