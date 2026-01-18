@@ -464,22 +464,56 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Animated Live Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black pointer-events-none overflow-hidden">
-        {/* Animated gradient orbs */}
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-red-500/20 via-orange-500/10 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDuration: '4s'}} />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-blue-500/15 via-cyan-500/10 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDuration: '5s', animationDelay: '1s'}} />
-        <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-r from-purple-500/10 via-pink-500/5 to-transparent rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" style={{animationDuration: '6s', animationDelay: '2s'}} />
+      {/* Enhanced Animated Live Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* Base gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
         
-        {/* Floating particles effect */}
-        <div className="absolute top-1/3 left-1/6 w-2 h-2 bg-red-500/40 rounded-full animate-bounce" style={{animationDuration: '3s'}} />
-        <div className="absolute top-2/3 right-1/4 w-3 h-3 bg-blue-500/30 rounded-full animate-bounce" style={{animationDuration: '4s', animationDelay: '0.5s'}} />
-        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-500/40 rounded-full animate-bounce" style={{animationDuration: '3.5s', animationDelay: '1s'}} />
-        <div className="absolute top-1/4 right-1/3 w-1.5 h-1.5 bg-cyan-500/50 rounded-full animate-bounce" style={{animationDuration: '2.5s', animationDelay: '1.5s'}} />
+        {/* Moving gradient orbs with CSS animation */}
+        <div className="absolute -top-40 -left-40 w-[800px] h-[800px] bg-gradient-radial from-red-500/30 via-orange-500/15 to-transparent rounded-full blur-3xl opacity-60" 
+          style={{animation: 'float 20s ease-in-out infinite'}} />
+        <div className="absolute -bottom-60 -right-60 w-[700px] h-[700px] bg-gradient-radial from-blue-600/25 via-cyan-500/15 to-transparent rounded-full blur-3xl opacity-60" 
+          style={{animation: 'float 25s ease-in-out infinite reverse', animationDelay: '-5s'}} />
+        <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-gradient-radial from-purple-500/20 via-pink-500/10 to-transparent rounded-full blur-3xl opacity-50" 
+          style={{animation: 'float 18s ease-in-out infinite', animationDelay: '-3s'}} />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-gradient-radial from-emerald-500/15 via-teal-500/10 to-transparent rounded-full blur-3xl opacity-40" 
+          style={{animation: 'float 22s ease-in-out infinite reverse', animationDelay: '-7s'}} />
         
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:40px_40px]" />
+        {/* Subtle aurora effect */}
+        <div className="absolute top-0 left-0 right-0 h-[50vh] bg-gradient-to-b from-red-500/5 via-transparent to-transparent" 
+          style={{animation: 'aurora 15s ease-in-out infinite'}} />
+        
+        {/* Floating particles */}
+        <div className="absolute top-1/4 left-1/5 w-1 h-1 bg-white/40 rounded-full" style={{animation: 'twinkle 3s ease-in-out infinite'}} />
+        <div className="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-red-400/50 rounded-full" style={{animation: 'twinkle 4s ease-in-out infinite', animationDelay: '1s'}} />
+        <div className="absolute top-2/3 left-1/3 w-1 h-1 bg-blue-400/50 rounded-full" style={{animation: 'twinkle 3.5s ease-in-out infinite', animationDelay: '0.5s'}} />
+        <div className="absolute bottom-1/3 right-1/3 w-1.5 h-1.5 bg-purple-400/50 rounded-full" style={{animation: 'twinkle 4.5s ease-in-out infinite', animationDelay: '2s'}} />
+        <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-cyan-400/50 rounded-full" style={{animation: 'twinkle 3s ease-in-out infinite', animationDelay: '1.5s'}} />
+        
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:60px_60px]" />
+        
+        {/* Noise texture overlay */}
+        <div className="absolute inset-0 opacity-[0.015]" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%270 0 256 256%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27noise%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.9%27 numOctaves=%274%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noise)%27/%3E%3C/svg%3E")'}} />
       </div>
+      
+      {/* CSS Keyframes */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes float {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          25% { transform: translate(30px, -30px) scale(1.05); }
+          50% { transform: translate(-20px, 20px) scale(0.95); }
+          75% { transform: translate(20px, 30px) scale(1.02); }
+        }
+        @keyframes aurora {
+          0%, 100% { opacity: 0.3; transform: translateX(0); }
+          50% { opacity: 0.6; transform: translateX(10%); }
+        }
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.5); }
+        }
+      `}} />
       
       {/* Top Navigation */}
       <nav className="border-b border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl sticky top-0 z-50 relative">
@@ -523,7 +557,7 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Queue', value: pendingCount, sub: 'Videos pending', color: 'text-blue-400', icon: '📥', gradient: 'from-blue-500/20 to-cyan-500/5' },
+            { label: 'In Drive', value: pendingCount, sub: 'Awaiting scan', color: 'text-blue-400', icon: '📁', gradient: 'from-blue-500/20 to-cyan-500/5' },
             { label: 'Drafts', value: drafts.length, sub: 'Ready for review', color: 'text-purple-400', icon: '📝', gradient: 'from-purple-500/20 to-pink-500/5' },
             { label: 'Published', value: videos.filter(v => v.status === 'UPLOADED').length, sub: 'On YouTube', color: 'text-emerald-400', icon: '🚀', gradient: 'from-emerald-500/20 to-teal-500/5' },
             { label: 'Subscribers', value: formatNumber(channel?.subscriberCount), sub: 'Channel growth', color: 'text-amber-400', icon: '👥', gradient: 'from-amber-500/20 to-orange-500/5' },
