@@ -4,10 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
     req: NextRequest,
-    props: { params: Promise<{ id: string }> }
+    { params }: { params: { id: string } }
 ) {
     try {
-        const params = await props.params;
         const session = await auth();
         if (!session?.accessToken) {
             return new NextResponse('Unauthorized', { status: 401 });

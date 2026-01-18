@@ -372,8 +372,9 @@ export default function Dashboard() {
 
   const formatNumber = (num: string | number | undefined) => {
     if (!num) return '-';
-    // Show exact number with commas as requested
-    return parseInt(String(num)).toLocaleString();
+    const n = typeof num === 'string' ? parseInt(num) : num;
+    // Show exact number with thousand separators
+    return n.toLocaleString();
   };
 
   const getStatusBadge = (videoStatus: string) => {
@@ -441,16 +442,24 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Animated Live Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black" />
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[120px] animate-[pulse_8s_ease-in-out_infinite]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-[pulse_10s_ease-in-out_infinite_1s]" />
-        <div className="absolute top-[40%] left-[20%] w-[30%] h-[30%] bg-red-500/5 rounded-full blur-[100px] animate-[pulse_12s_ease-in-out_infinite_2s]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:24px_24px]" />
+      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black pointer-events-none overflow-hidden">
+        {/* Animated gradient orbs */}
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-red-500/20 via-orange-500/10 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDuration: '4s'}} />
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-blue-500/15 via-cyan-500/10 to-transparent rounded-full blur-3xl animate-pulse" style={{animationDuration: '5s', animationDelay: '1s'}} />
+        <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-gradient-to-r from-purple-500/10 via-pink-500/5 to-transparent rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" style={{animationDuration: '6s', animationDelay: '2s'}} />
+        
+        {/* Floating particles effect */}
+        <div className="absolute top-1/3 left-1/6 w-2 h-2 bg-red-500/40 rounded-full animate-bounce" style={{animationDuration: '3s'}} />
+        <div className="absolute top-2/3 right-1/4 w-3 h-3 bg-blue-500/30 rounded-full animate-bounce" style={{animationDuration: '4s', animationDelay: '0.5s'}} />
+        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-500/40 rounded-full animate-bounce" style={{animationDuration: '3.5s', animationDelay: '1s'}} />
+        <div className="absolute top-1/4 right-1/3 w-1.5 h-1.5 bg-cyan-500/50 rounded-full animate-bounce" style={{animationDuration: '2.5s', animationDelay: '1.5s'}} />
+        
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
-       
+      
       {/* Top Navigation */}
-      <nav className="border-b border-zinc-800/50 bg-zinc-900/60 backdrop-blur-xl sticky top-0 z-50 relative">
+      <nav className="border-b border-zinc-800/50 bg-zinc-900/80 backdrop-blur-xl sticky top-0 z-50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -489,22 +498,28 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Queue', value: pendingCount, sub: 'Videos pending', color: 'text-blue-400', icon: '📥' },
-            { label: 'Drafts', value: drafts.length, sub: 'Ready for review', color: 'text-purple-400', icon: '📝' },
-            { label: 'Published', value: videos.filter(v => v.status === 'UPLOADED').length, sub: 'On YouTube', color: 'text-emerald-400', icon: '🚀' },
-            { label: 'Subscribers', value: formatNumber(channel?.subscriberCount), sub: 'Channel growth', color: 'text-amber-400', icon: '👥' },
+            { label: 'Queue', value: pendingCount, sub: 'Videos pending', color: 'text-blue-400', icon: '📥', gradient: 'from-blue-500/20 to-cyan-500/5' },
+            { label: 'Drafts', value: drafts.length, sub: 'Ready for review', color: 'text-purple-400', icon: '📝', gradient: 'from-purple-500/20 to-pink-500/5' },
+            { label: 'Published', value: videos.filter(v => v.status === 'UPLOADED').length, sub: 'On YouTube', color: 'text-emerald-400', icon: '🚀', gradient: 'from-emerald-500/20 to-teal-500/5' },
+            { label: 'Subscribers', value: formatNumber(channel?.subscriberCount), sub: 'Channel growth', color: 'text-amber-400', icon: '👥', gradient: 'from-amber-500/20 to-orange-500/5' },
           ].map((stat, i) => (
-            <Card key={i} className="bg-zinc-900/50 border-zinc-800/50 hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 group">
-              <CardContent className="p-5">
+            <Card 
+              key={i} 
+              className="bg-zinc-900/50 border-zinc-800/50 hover:bg-zinc-800/50 hover:border-zinc-700/50 transition-all duration-500 group hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20 relative overflow-hidden"
+              style={{animationDelay: `${i * 100}ms`}}
+            >
+              {/* Gradient glow effect */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+              <CardContent className="p-5 relative">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{stat.label}</p>
-                    <p className={`text-3xl font-bold mt-1 ${stat.color} transition-transform duration-300 group-hover:scale-105`}>{stat.value}</p>
-                    <p className="text-xs text-zinc-600 mt-1">{stat.sub}</p>
+                    <p className={`text-3xl font-bold mt-1 ${stat.color} transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-lg`}>{stat.value}</p>
+                    <p className="text-xs text-zinc-600 mt-1 group-hover:text-zinc-400 transition-colors">{stat.sub}</p>
                   </div>
-                  <span className="text-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-300">{stat.icon}</span>
+                  <span className="text-2xl opacity-50 group-hover:opacity-100 group-hover:scale-125 transition-all duration-300">{stat.icon}</span>
                 </div>
               </CardContent>
             </Card>
@@ -656,7 +671,7 @@ export default function Dashboard() {
                             size="sm" 
                             variant="destructive" 
                             onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/20 border-0 animate-in zoom-in duration-300"
+                            className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
                           >
                             Delete Selected ({selectedVideos.size})
                           </Button>
@@ -720,7 +735,7 @@ export default function Dashboard() {
                               </div>
                               
                               {/* Actions */}
-                              <div className="flex items-center gap-1 transition-opacity duration-200">
+                              <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity duration-200">
                                 <Button variant="ghost" size="sm" onClick={() => openEditModal(video)} className="text-zinc-400 hover:text-white h-8 w-8 p-0">
                                   <EditIcon />
                                 </Button>
@@ -753,7 +768,7 @@ export default function Dashboard() {
                             size="sm" 
                             variant="destructive" 
                             onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/20 border-0 animate-in zoom-in duration-300"
+                            className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
                           >
                             Delete Selected ({selectedVideos.size})
                           </Button>
