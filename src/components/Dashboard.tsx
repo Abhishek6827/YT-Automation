@@ -675,7 +675,9 @@ export default function Dashboard() {
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-zinc-300">Result</span>
                       <span className={lastResult.failed > 0 ? "text-red-400" : "text-emerald-400"}>
-                        {lastResult.processed} processed, {lastResult.uploaded} uploaded
+                        {lastResult.uploaded > 0 
+                          ? `${lastResult.uploaded} uploaded to YouTube` 
+                          : `${lastResult.processed} drafts created`}
                       </span>
                     </div>
                     {lastResult.errors?.map((e, i) => (
@@ -1029,8 +1031,11 @@ export default function Dashboard() {
                            src={`/api/proxy/video/${file.id}`}
                            className="w-full h-full object-cover"
                            autoPlay
+                           muted
                            playsInline
-                           controls // Allow user to unmute/seek
+                           loop
+                           onMouseEnter={(e) => { (e.target as HTMLVideoElement).muted = false; }}
+                           onMouseLeave={(e) => { (e.target as HTMLVideoElement).muted = true; }}
                          />
                       </div>
                     ) : (
