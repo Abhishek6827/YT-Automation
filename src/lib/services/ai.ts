@@ -26,7 +26,7 @@ export async function generateVideoMetadata(
 
     console.log(`[AI] Generating metadata for: ${fileName}, API key length: ${apiKey.length}`);
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // Add randomization elements for unique generation
     const randomSeed = Math.random().toString(36).substring(7);
@@ -151,7 +151,7 @@ export async function generateMetadataFromTranscript(
 
     console.log(`[AI] Generating metadata from transcript, length: ${transcript.length}`);
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // Add randomization for variety
     const randomSeed = Math.random().toString(36).substring(7);
