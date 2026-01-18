@@ -127,3 +127,35 @@ export async function getFileMetadata(
 
     return response.data as DriveFile;
 }
+
+// Download a file from Drive as Buffer (for transcription)
+export async function downloadFileBuffer(
+    accessToken: string,
+    fileId: string,
+    maxBytes: number = 10 * 1024 * 1024 // Default 10MB limit for transcription
+): Promise<Buffer> {
+    const drive = createDriveClient(accessToken);
+
+    try {
+        const response = await drive.files.get(
+            { fileId, alt: 'media' },
+            { responseType: 'arraybuffer' }
+        );
+
+        const data = response.data as ArrayBuffer;
+        let buffer = Buffer.from(data);
+
+        // If file is larger than maxBytes, only take the first portion
+        // This is fine for transcription since we only need audio sample
+        if (buffer.length > maxBytes) {
+            console.log(`[Drive] File is ${buffer.length} bytes, truncating to ${maxBytes} bytes for transcription`);
+            buffer = buffer.subarray(0, maxBytes);
+        }
+
+        console.log(`[Drive] Downloaded ${buffer.length} bytes for transcription`);
+        return buffer;
+    } catch (error) {
+        console.error('[Drive] Error downloading file as buffer:', error);
+        throw error;
+    }
+}

@@ -115,3 +115,82 @@ Output ONLY valid JSON. Be creative and UNIQUE!`;
         };
     }
 }
+
+// Generate metadata from audio transcript (Whisper transcription)
+export async function generateMetadataFromTranscript(
+    transcript: string,
+    fileName: string
+): Promise<VideoMetadata> {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    // Add randomization for variety
+    const randomSeed = Math.random().toString(36).substring(7);
+    const randomEmojis = ['😱', '💀', '🔥', '✨', '😭', '🤯', '👀', '💪', '🎯', '💯', '😂', '🙌'];
+    const selectedEmojis = randomEmojis.sort(() => 0.5 - Math.random()).slice(0, 4).join('');
+
+    const prompt = `You are a TOP YouTube Shorts creator with 10M+ subscribers. Generate VIRAL metadata based on actual video content.
+
+SEED: ${randomSeed}
+EMOJIS: ${selectedEmojis}
+
+## ACTUAL VIDEO TRANSCRIPT:
+"${transcript.slice(0, 2000)}"
+
+## YOUR TASK:
+Based on the transcript above, create YouTube metadata that:
+1. Captures the MAIN TOPIC or HOOK from the spoken content
+2. Creates curiosity without giving everything away
+3. Uses emotional triggers matching the content tone
+
+Generate JSON:
+{
+  "title": "Catchy title based on transcript content (max 60 chars, use emojis)",
+  "description": "Hook sentence summarizing video content. What viewers will learn/see. Call to action. Then 5 relevant hashtags.",
+  "tags": ["15-20 specific tags based on transcript topics, each max 30 chars"]
+}
+
+YOUTUBE LIMITS:
+- Title: max 100 characters (aim for 40-60)
+- Tags: max 500 characters TOTAL
+- Each tag: max 30 characters
+
+Output ONLY valid JSON. Make it VIRAL!`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const text = response.text();
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('No JSON found in response');
+        }
+
+        const metadata = JSON.parse(jsonMatch[0]) as VideoMetadata;
+
+        // Validate and sanitize
+        let tags = Array.isArray(metadata.tags)
+            ? metadata.tags.map(t => String(t).trim().replace(/^#/, '').slice(0, 30))
+            : [];
+
+        let totalChars = 0;
+        const limitedTags: string[] = [];
+        for (const tag of tags) {
+            if (totalChars + tag.length + 1 <= 500) {
+                limitedTags.push(tag);
+                totalChars += tag.length + 1;
+            } else break;
+        }
+
+        console.log('[AI] Generated metadata from transcript:', metadata.title);
+        return {
+            title: (metadata.title || fileName).slice(0, 100),
+            description: (metadata.description || '').slice(0, 5000),
+            tags: limitedTags,
+        };
+    } catch (error) {
+        console.error('[AI] Error generating from transcript, falling back to filename:', error);
+        // Fallback to filename-based generation
+        return generateVideoMetadata(fileName);
+    }
+}

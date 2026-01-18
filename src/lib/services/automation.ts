@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db';
-import { listVideosFromFolder, downloadFile, extractFolderId } from '@/lib/services/drive';
-import { generateVideoMetadata } from '@/lib/services/ai';
+import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer } from '@/lib/services/drive';
+import { generateVideoMetadata, generateMetadataFromTranscript } from '@/lib/services/ai';
 import { uploadVideo } from '@/lib/services/youtube';
+import { transcribeAudio, uploadForTranscription } from '@/lib/services/whisper';
 
 export interface AutomationResult {
     processed: number;
@@ -148,8 +149,43 @@ export async function runAutomation(
             // So logic inside getNextScheduleTime is correct.
 
             try {
-                // Generate metadata using AI first
-                const metadata = await generateVideoMetadata(file.name);
+                // Try to transcribe video audio for better metadata
+                let metadata;
+
+                // Only attempt transcription if REPLICATE_API_TOKEN is set
+                if (process.env.REPLICATE_API_TOKEN) {
+                    console.log(`[Automation] Attempting transcription for: ${file.name}`);
+                    try {
+                        // Download first portion of video for transcription
+                        const videoBuffer = await downloadFileBuffer(accessToken, file.id);
+
+                        if (videoBuffer && videoBuffer.length > 0) {
+                            // Upload to Replicate for transcription
+                            const fileUrl = await uploadForTranscription(videoBuffer, file.name);
+
+                            if (fileUrl) {
+                                // Transcribe with Whisper
+                                const transcription = await transcribeAudio(fileUrl);
+
+                                if (transcription.success && transcription.transcript) {
+                                    console.log(`[Automation] Transcription successful: ${transcription.transcript.slice(0, 100)}...`);
+                                    // Generate metadata from transcript
+                                    metadata = await generateMetadataFromTranscript(transcription.transcript, file.name);
+                                } else {
+                                    console.log(`[Automation] Transcription failed: ${transcription.error}`);
+                                }
+                            }
+                        }
+                    } catch (transcriptError) {
+                        console.error('[Automation] Transcription error:', transcriptError);
+                    }
+                }
+
+                // Fallback to filename-based generation if transcription failed
+                if (!metadata) {
+                    console.log(`[Automation] Using filename-based metadata for: ${file.name}`);
+                    metadata = await generateVideoMetadata(file.name);
+                }
 
                 // Create record in database
                 const videoRecord = await prisma.video.create({
