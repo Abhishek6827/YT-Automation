@@ -44,6 +44,9 @@ export async function GET() {
                 name: f.name,
                 size: f.size ? parseInt(f.size, 10) : undefined,
                 driveUrl: `https://drive.google.com/file/d/${f.id}/view`,
+                // Direct preview URL that works without our proxy
+                // This uses Google Drive's preview endpoint which supports video streaming
+                previewUrl: `https://drive.google.com/uc?export=preview&id=${f.id}`,
             })),
         });
     } catch (error) {

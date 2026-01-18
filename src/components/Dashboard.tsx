@@ -1027,15 +1027,12 @@ export default function Dashboard() {
                   >
                     {hoveredFileId === file.id ? (
                       <div className="absolute inset-0 bg-black z-10 flex flex-col">
-                         <video
-                           src={`/api/proxy/video/${file.id}`}
-                           className="w-full h-full object-cover"
-                           autoPlay
-                           muted
-                           playsInline
-                           loop
-                           onMouseEnter={(e) => { (e.target as HTMLVideoElement).muted = false; }}
-                           onMouseLeave={(e) => { (e.target as HTMLVideoElement).muted = true; }}
+                         {/* Use Google Drive's embedded preview which handles auth */}
+                         <iframe
+                           src={`https://drive.google.com/file/d/${file.id}/preview`}
+                           className="w-full h-full"
+                           allow="autoplay"
+                           frameBorder="0"
                          />
                       </div>
                     ) : (
