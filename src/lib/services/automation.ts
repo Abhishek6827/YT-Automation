@@ -149,25 +149,59 @@ export async function runAutomation(
             // So logic inside getNextScheduleTime is correct.
 
             try {
-                // Generate metadata using AI
+                // Generate metadata using AI - try Whisper transcription first
                 let metadata;
+                let transcript: string | null = null;
 
-                /* 
-                 * WHISPER TRANSCRIPTION DISABLED TEMPORARILY
-                 * ==========================================
-                 * Reason: Vercel serverless functions have a 10-60 second timeout.
-                 * The Whisper pipeline (download video + upload to Replicate + transcribe)
-                 * takes 2-5 minutes, causing 504 Gateway Timeout errors.
-                 * 
-                 * To re-enable: Use a background job system (like Vercel Cron + database queue)
-                 * or deploy to a platform with longer timeouts (Railway, Render, etc.)
-                 */
+                // Attempt Whisper transcription if REPLICATE_API_TOKEN is set
+                if (process.env.REPLICATE_API_TOKEN) {
+                    console.log(`[Automation] Attempting transcription for: ${file.name}`);
+                    try {
+                        // Wrap transcription in a timeout promise (45 seconds max)
+                        const transcriptionPromise = (async () => {
+                            // Download first 5MB of video (enough for short clips)
+                            const videoBuffer = await downloadFileBuffer(accessToken, file.id, 5 * 1024 * 1024);
 
-                // For now, use filename-based generation (fast, reliable)
-                console.log(`[Automation] Generating metadata for: ${file.name}`);
-                metadata = await generateVideoMetadata(file.name);
+                            if (videoBuffer && videoBuffer.length > 0) {
+                                // Upload to Replicate for transcription
+                                const fileUrl = await uploadForTranscription(videoBuffer, file.name);
 
-                // Create record in database
+                                if (fileUrl) {
+                                    // Transcribe with Whisper
+                                    const result = await transcribeAudio(fileUrl);
+                                    return result;
+                                }
+                            }
+                            return { success: false, error: 'Failed to prepare file' };
+                        })();
+
+                        // 45 second timeout
+                        const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
+                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (45s limit)' }), 45000);
+                        });
+
+                        const transcriptionResult = await Promise.race([transcriptionPromise, timeoutPromise]);
+
+                        if (transcriptionResult.success && transcriptionResult.transcript) {
+                            transcript = transcriptionResult.transcript;
+                            console.log(`[Automation] Transcription successful: ${transcript.slice(0, 100)}...`);
+                            // Generate metadata from transcript
+                            metadata = await generateMetadataFromTranscript(transcript, file.name);
+                        } else {
+                            console.log(`[Automation] Transcription failed: ${transcriptionResult.error}`);
+                        }
+                    } catch (transcriptError) {
+                        console.error('[Automation] Transcription error:', transcriptError);
+                    }
+                }
+
+                // Fallback to filename-based generation if transcription failed
+                if (!metadata) {
+                    console.log(`[Automation] Using filename-based metadata for: ${file.name}`);
+                    metadata = await generateVideoMetadata(file.name);
+                }
+
+                // Create record in database (including transcript if available)
                 const videoRecord = await prisma.video.create({
                     data: {
                         driveId: file.id,
@@ -176,6 +210,7 @@ export async function runAutomation(
                         title: metadata.title,
                         description: metadata.description,
                         tags: metadata.tags.join(','),
+                        transcript: transcript, // Store transcript for display in UI
                         scheduledFor: draftOnly ? null : scheduleTime,
                     },
                 });

@@ -21,6 +21,7 @@ interface Video {
   title: string | null;
   description: string | null;
   tags: string | null;
+  transcript: string | null; // Whisper transcription
   status: string;
   youtubeId: string | null;
   uploadedAt: string | null;
@@ -134,6 +135,7 @@ export default function Dashboard() {
   const [driveFiles, setDriveFiles] = useState<{id: string, name: string, driveUrl: string}[]>([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
+  const [selectedPreviewFile, setSelectedPreviewFile] = useState<{id: string, name: string} | null>(null);
 
   // Fetch functions
   const fetchSettings = useCallback(async () => {
@@ -994,19 +996,53 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Drive Preview Modal */}
-      <Dialog open={drivePreviewOpen} onOpenChange={setDrivePreviewOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white w-[95vw] max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <Dialog open={drivePreviewOpen} onOpenChange={(open) => {
+        setDrivePreviewOpen(open);
+        if (!open) setSelectedPreviewFile(null); // Reset selection when closing
+      }}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white w-[95vw] max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="p-4 border-b border-zinc-800">
             <DialogTitle className="text-xl text-white flex items-center gap-2">
-              <FolderIcon /> Drive Files Preview
+              {selectedPreviewFile ? (
+                <>
+                  <button 
+                    onClick={() => setSelectedPreviewFile(null)}
+                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors mr-2"
+                    title="Back to Grid"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <span className="truncate">{selectedPreviewFile.name}</span>
+                </>
+              ) : (
+                <>
+                  <FolderIcon /> Drive Files Preview
+                </>
+              )}
             </DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Files found in the configured Google Drive folder. Hover to play.
+              {selectedPreviewFile 
+                ? 'Press back arrow or close to return to file list.'
+                : `Click a video to play. ${driveFiles.length} files found.`}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto p-4 bg-zinc-950/50">
-            {isPreviewLoading ? (
+          <div className="flex-1 overflow-y-auto bg-zinc-950/50 flex items-center justify-center">
+            {selectedPreviewFile ? (
+              /* Centered Fullscreen Video Player */
+              <div className="w-full h-full flex items-center justify-center p-4">
+                <div className="w-full max-w-3xl aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
+                  <iframe
+                    src={`https://drive.google.com/file/d/${selectedPreviewFile.id}/preview`}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : isPreviewLoading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-2">
                 <RefreshIcon spinning />
                 <p className="text-zinc-500 text-sm">Scanning Drive...</p>
@@ -1017,45 +1053,35 @@ export default function Dashboard() {
                 <p className="text-zinc-600 text-xs mt-1">Check permissions and folder link.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {driveFiles.map((file) => (
-                  <div 
-                    key={file.id} 
-                    className="relative aspect-video bg-zinc-900 border border-zinc-800/50 rounded-xl overflow-hidden group hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all duration-300"
-                    onMouseEnter={() => setHoveredFileId(file.id)}
-                    onMouseLeave={() => setHoveredFileId(null)}
-                  >
-                    {hoveredFileId === file.id ? (
-                      <div className="absolute inset-0 bg-black z-10 flex flex-col">
-                         {/* Use Google Drive's embedded preview which handles auth */}
-                         <iframe
-                           src={`https://drive.google.com/file/d/${file.id}/preview`}
-                           className="w-full h-full"
-                           allow="autoplay"
-                           frameBorder="0"
-                         />
-                      </div>
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                        <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 mb-2 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
+              /* File Grid */
+              <div className="w-full h-full p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {driveFiles.map((file) => (
+                    <div 
+                      key={file.id} 
+                      className="relative aspect-video bg-zinc-900 border border-zinc-800/50 rounded-xl overflow-hidden group hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all duration-300 cursor-pointer"
+                      onClick={() => setSelectedPreviewFile({ id: file.id, name: file.name })}
+                    >
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
+                        <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 mb-1 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300 group-hover:scale-110">
                           <PlayIcon />
                         </div>
-                        <p className="text-xs text-zinc-400 text-center truncate w-full px-2 font-medium group-hover:text-zinc-200 transition-colors">{file.name}</p>
+                        <p className="text-[10px] text-zinc-400 text-center truncate w-full px-1 font-medium group-hover:text-zinc-200 transition-colors">{file.name}</p>
                       </div>
-                    )}
-                    
-                    {/* Overlay info when not playing (or playing but controls hide it usually, but we keep it simple) */}
-                    <div className={`absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex justify-between items-end pointer-events-none transition-opacity duration-200 ${hoveredFileId === file.id ? 'opacity-0' : 'opacity-100'}`}>
-                       <span className="text-[10px] text-zinc-400 truncate flex-1 mr-2">{file.name}</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
           
           <DialogFooter className="p-4 border-t border-zinc-800 bg-zinc-900">
-            <Button onClick={() => setDrivePreviewOpen(false)} className="bg-zinc-800 hover:bg-zinc-700 text-white">
+            {selectedPreviewFile ? (
+              <Button onClick={() => setSelectedPreviewFile(null)} className="bg-zinc-800 hover:bg-zinc-700 text-white">
+                ← Back to Grid
+              </Button>
+            ) : null}
+            <Button onClick={() => { setDrivePreviewOpen(false); setSelectedPreviewFile(null); }} className="bg-zinc-800 hover:bg-zinc-700 text-white">
               Close
             </Button>
           </DialogFooter>

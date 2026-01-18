@@ -17,6 +17,7 @@ model Video {
   title       String?
   description String?
   tags        String?
+  transcript  String?   @db.Text // Whisper transcription for AI metadata
   status      String    @default("PENDING") // PENDING, PROCESSING, UPLOADED, FAILED
   youtubeId   String?
   uploadedAt  DateTime?
