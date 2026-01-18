@@ -1055,18 +1055,22 @@ export default function Dashboard() {
             ) : (
               /* File Grid */
               <div className="w-full h-full p-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {driveFiles.map((file) => (
                     <div 
                       key={file.id} 
-                      className="relative aspect-video bg-zinc-900 border border-zinc-800/50 rounded-xl overflow-hidden group hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all duration-300 cursor-pointer"
+                      className="relative bg-zinc-900 border border-zinc-800/50 rounded-xl overflow-hidden group hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all duration-300 cursor-pointer"
                       onClick={() => setSelectedPreviewFile({ id: file.id, name: file.name })}
                     >
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
-                        <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 mb-1 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300 group-hover:scale-110">
+                      {/* Video thumbnail area */}
+                      <div className="aspect-video flex items-center justify-center bg-zinc-800/50">
+                        <div className="w-12 h-12 bg-zinc-700 rounded-full flex items-center justify-center text-zinc-400 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300 group-hover:scale-110">
                           <PlayIcon />
                         </div>
-                        <p className="text-[10px] text-zinc-400 text-center truncate w-full px-1 font-medium group-hover:text-zinc-200 transition-colors">{file.name}</p>
+                      </div>
+                      {/* File name - separate from video area */}
+                      <div className="p-2 bg-zinc-900">
+                        <p className="text-[11px] text-zinc-400 text-center truncate font-medium group-hover:text-zinc-200 transition-colors">{file.name}</p>
                       </div>
                     </div>
                   ))}

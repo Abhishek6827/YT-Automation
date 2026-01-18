@@ -127,6 +127,8 @@ export async function runAutomation(
             return result;
         }
 
+        console.log(`[Automation] Total new files: ${newFiles.length}, limit: ${limit}, will process: ${Math.min(newFiles.length, limit)}`);
+
         // Process up to 'limit' files
         const filesToProcess = newFiles.slice(0, limit);
 
