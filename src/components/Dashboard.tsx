@@ -205,7 +205,7 @@ export default function Dashboard() {
       const res = await fetch('/api/automation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftOnly }),
+        body: JSON.stringify({ draftOnly, limit: settings.videosPerDay }),
       });
       const data = await res.json();
       if (!res.ok) {

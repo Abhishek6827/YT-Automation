@@ -61,20 +61,27 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
         }
 
-        // Parse request body for draftOnly flag
+        // Parse request body for draftOnly flag and limit
         let draftOnly = false;
+        let limit = settings.videosPerDay; // Default to saved settings
         try {
             const body = await req.json();
             draftOnly = body?.draftOnly === true;
+            // Use limit from request if provided (current dropdown value)
+            if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
+                limit = body.limit;
+            }
         } catch {
-            // No body or invalid JSON - that's fine, default to false
+            // No body or invalid JSON - that's fine, use defaults
         }
+
+        console.log(`[Automation] Running with limit: ${limit}, draftOnly: ${draftOnly}`);
 
         // Run automation
         const result = await runAutomation(
             accessToken,
             settings.driveFolderLink,
-            settings.videosPerDay,
+            limit, // Use parsed limit from request
             settings.uploadHour,
             draftOnly
         );
