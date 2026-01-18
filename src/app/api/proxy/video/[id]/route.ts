@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const session = await auth();
@@ -12,8 +12,8 @@ export async function GET(
             return new NextResponse('Unauthorized', { status: 401 });
         }
 
+        const { id: fileId } = await params;
         const drive = createDriveClient(session.accessToken);
-        const fileId = params.id;
 
         // Get file metadata for Content-Type and Size
         const metadata = await drive.files.get({
