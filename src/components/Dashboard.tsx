@@ -265,19 +265,42 @@ export default function Dashboard() {
     setShowBulkDeleteConfirm(false);
     if (selectedVideos.size === 0) return;
 
-    // Delete locally first for UI responsiveness (optimistic)
     const videosToDelete = Array.from(selectedVideos);
-    const remainingVideos = videos.filter(v => !selectedVideos.has(v.id));
-    setVideos(remainingVideos);
-    setSelectedVideos(new Set());
+    const totalCount = videosToDelete.length;
+    let successCount = 0;
+    let failCount = 0;
+    const failedIds: string[] = [];
 
-    // Process deletions in background
+    // Show progress - set first video as deleting
+    setIsDeleting(videosToDelete[0]);
+
+    // Process deletions sequentially to track progress
     for (const id of videosToDelete) {
+      setIsDeleting(id);
       try {
-        await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          successCount++;
+          // Remove from local state immediately on success
+          setVideos(prev => prev.filter(v => v.id !== id));
+        } else {
+          failCount++;
+          failedIds.push(id);
+          console.error(`Failed to delete ${id}:`, await res.text());
+        }
       } catch (e) {
+        failCount++;
+        failedIds.push(id);
         console.error('Failed to delete video:', id, e);
       }
+    }
+
+    setIsDeleting(null);
+    setSelectedVideos(new Set(failedIds)); // Keep failed ones selected
+
+    // Show result summary
+    if (failCount > 0) {
+      alert(`Deleted ${successCount}/${totalCount} videos. ${failCount} failed (may need to re-login for permissions).`);
     }
   };
 

@@ -15,40 +15,52 @@ export async function generateVideoMetadata(
 ): Promise<VideoMetadata> {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    const basePrompt = customPrompt || `You are a YouTube content creator assistant. Generate engaging metadata for a video.`;
+    // Add randomization elements for unique generation
+    const randomSeed = Math.random().toString(36).substring(7);
+    const titleStyles = [
+        'suspense/mystery', 'humor/comedy', 'emotional/heartfelt',
+        'shocking/surprising', 'satisfying/relaxing', 'motivational/inspiring'
+    ];
+    const randomStyle = titleStyles[Math.floor(Math.random() * titleStyles.length)];
+    const randomEmojis = ['😱', '💀', '🔥', '✨', '😭', '🤯', '👀', '💪', '🎯', '💯', '😂', '🙌'];
+    const selectedEmojis = randomEmojis.sort(() => 0.5 - Math.random()).slice(0, 3).join('');
 
-    const prompt = `You are a TOP YouTube Shorts creator with 10M+ subscribers. Your videos go VIRAL because of amazing titles.
+    const prompt = `You are a TOP YouTube Shorts creator with 10M+ subscribers. Generate UNIQUE viral metadata.
 
-TASK: Generate viral YouTube Shorts metadata.
+SEED: ${randomSeed} (use this to ensure uniqueness)
+STYLE: ${randomStyle}
+SUGGESTED EMOJIS: ${selectedEmojis}
 
-VIDEO FILENAME: "${fileName}"
+VIDEO FILE: "${fileName}"
 
-IMPORTANT RULES:
-1. The filename might be generic (like "video_001.mp4" or "subtitle (5).mp4"). DO NOT use the filename literally as title.
-2. Instead, CREATE an original, catchy, curiosity-inducing title as if YOU made this viral short.
-3. Think: What makes people click? Mystery, emotion, surprise, relatability, humor.
+CRITICAL RULES:
+1. NEVER use the filename as title - create something ORIGINAL
+2. Each generation must be COMPLETELY DIFFERENT - use the seed for randomness
+3. Match the ${randomStyle} style for this video
+4. Title max 100 chars, but keep it punchy (40-60 chars ideal)
 
-Generate JSON with:
+Generate JSON:
 {
-  "title": "VIRAL title (max 50 chars). Examples: 'Wait for it... 😱', 'Nobody Expected THIS 💀', 'POV: You finally did it ✨', 'This changes everything 🔥'",
-  "description": "Hook sentence + context + call to action. End with: SUBSCRIBE for more! Include 3-5 hashtags",
-  "tags": ["shorts", "viral", "fyp", "trending", "satisfying", "relatable", "pov", "mustwatch"]
+  "title": "Unique viral title using ${randomStyle} style with emojis",
+  "description": "Engaging description (max 200 chars). Hook the viewer. End with: Subscribe for more amazing content! Then add 5 relevant hashtags.",
+  "tags": ["15-20 unique tags relevant to shorts content, each tag max 30 chars"]
 }
 
-TITLE STYLES THAT WORK:
-- "Wait for it..." (builds suspense)
-- "POV: [relatable situation]" (personal)
-- "Nobody expected THIS" (surprise)
-- "When [situation] hits different" (relatable)
-- "He actually did it 💀" (reaction)
-- Use emojis: 😱💀🔥✨😭🤯
+YOUTUBE LIMITS TO FOLLOW:
+- Title: max 100 characters
+- Description: max 5000 characters  
+- Tags: max 500 characters TOTAL (all tags combined)
+- Each individual tag: max 30 characters
 
-NEVER:
-- Use the raw filename as title
-- Say "english subtitle" or any technical terms
-- Be boring or generic
+TITLE EXAMPLES for ${randomStyle}:
+${randomStyle === 'suspense/mystery' ? '- "Wait for the ending... 😱"\n- "Nobody saw this coming 💀"\n- "The last second changed everything"' : ''}
+${randomStyle === 'humor/comedy' ? '- "I can\'t stop laughing 😂"\n- "This is so relatable 💀"\n- "POV: Every time without fail"' : ''}
+${randomStyle === 'emotional/heartfelt' ? '- "This hit different 😭"\n- "I wasn\'t expecting to cry ✨"\n- "Faith in humanity restored"' : ''}
+${randomStyle === 'shocking/surprising' ? '- "How is this even possible?! 🤯"\n- "I had to watch this 5 times"\n- "This broke the internet 🔥"' : ''}
+${randomStyle === 'satisfying/relaxing' ? '- "So satisfying to watch ✨"\n- "I could watch this forever"\n"Peak satisfaction 💯"' : ''}
+${randomStyle === 'motivational/inspiring' ? '- "This changed my mindset 💪"\n- "Watch this when you need motivation"\n- "Never give up 🔥"' : ''}
 
-Output ONLY valid JSON.`;
+Output ONLY valid JSON. Be creative and UNIQUE!`;
 
 
     try {
@@ -64,13 +76,12 @@ Output ONLY valid JSON.`;
 
         const metadata = JSON.parse(jsonMatch[0]) as VideoMetadata;
 
-        // Validate and sanitize
-        // YouTube allows max 500 characters TOTAL for all tags combined
+        // Validate and sanitize with YouTube limits
         let tags = Array.isArray(metadata.tags)
-            ? metadata.tags.map(t => String(t).trim().replace(/^#/, '')) // Remove # prefix if present
+            ? metadata.tags.map(t => String(t).trim().replace(/^#/, '').slice(0, 30)) // Each tag max 30 chars
             : [];
 
-        // Enforce 500 char total limit
+        // Enforce 500 char total limit for all tags
         let totalChars = 0;
         const limitedTags: string[] = [];
         for (const tag of tags) {
@@ -83,8 +94,8 @@ Output ONLY valid JSON.`;
         }
 
         return {
-            title: (metadata.title || fileName).slice(0, 100),
-            description: (metadata.description || '').slice(0, 5000),
+            title: (metadata.title || fileName).slice(0, 100), // YouTube title limit
+            description: (metadata.description || '').slice(0, 5000), // YouTube description limit
             tags: limitedTags,
         };
     } catch (error) {
