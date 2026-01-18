@@ -149,43 +149,23 @@ export async function runAutomation(
             // So logic inside getNextScheduleTime is correct.
 
             try {
-                // Try to transcribe video audio for better metadata
+                // Generate metadata using AI
                 let metadata;
 
-                // Only attempt transcription if REPLICATE_API_TOKEN is set
-                if (process.env.REPLICATE_API_TOKEN) {
-                    console.log(`[Automation] Attempting transcription for: ${file.name}`);
-                    try {
-                        // Download first portion of video for transcription
-                        const videoBuffer = await downloadFileBuffer(accessToken, file.id);
+                /* 
+                 * WHISPER TRANSCRIPTION DISABLED TEMPORARILY
+                 * ==========================================
+                 * Reason: Vercel serverless functions have a 10-60 second timeout.
+                 * The Whisper pipeline (download video + upload to Replicate + transcribe)
+                 * takes 2-5 minutes, causing 504 Gateway Timeout errors.
+                 * 
+                 * To re-enable: Use a background job system (like Vercel Cron + database queue)
+                 * or deploy to a platform with longer timeouts (Railway, Render, etc.)
+                 */
 
-                        if (videoBuffer && videoBuffer.length > 0) {
-                            // Upload to Replicate for transcription
-                            const fileUrl = await uploadForTranscription(videoBuffer, file.name);
-
-                            if (fileUrl) {
-                                // Transcribe with Whisper
-                                const transcription = await transcribeAudio(fileUrl);
-
-                                if (transcription.success && transcription.transcript) {
-                                    console.log(`[Automation] Transcription successful: ${transcription.transcript.slice(0, 100)}...`);
-                                    // Generate metadata from transcript
-                                    metadata = await generateMetadataFromTranscript(transcription.transcript, file.name);
-                                } else {
-                                    console.log(`[Automation] Transcription failed: ${transcription.error}`);
-                                }
-                            }
-                        }
-                    } catch (transcriptError) {
-                        console.error('[Automation] Transcription error:', transcriptError);
-                    }
-                }
-
-                // Fallback to filename-based generation if transcription failed
-                if (!metadata) {
-                    console.log(`[Automation] Using filename-based metadata for: ${file.name}`);
-                    metadata = await generateVideoMetadata(file.name);
-                }
+                // For now, use filename-based generation (fast, reliable)
+                console.log(`[Automation] Generating metadata for: ${file.name}`);
+                metadata = await generateVideoMetadata(file.name);
 
                 // Create record in database
                 const videoRecord = await prisma.video.create({
