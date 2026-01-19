@@ -853,10 +853,17 @@ export default function Dashboard() {
                               >
                                 {selectedVideos.has(video.id) && <CheckIcon />}
                               </div>
-                              {/* File icon */}
-                              <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-purple-500/20">
-                                <span className="text-lg">🎬</span>
-                              </div>
+                              {/* Video Preview Button */}
+                              <button 
+                                onClick={() => {
+                                  setSelectedPreviewFile({ id: video.driveId, name: video.fileName });
+                                  setDrivePreviewOpen(true);
+                                }}
+                                className="w-16 h-12 bg-zinc-800/80 rounded-lg flex items-center justify-center flex-shrink-0 border border-zinc-700/50 hover:bg-blue-600 hover:border-blue-500 transition-all duration-300 group/play cursor-pointer"
+                                title="Preview Video"
+                              >
+                                <PlayIcon />
+                              </button>
                               
                               {/* Info */}
                               <div className="flex-1 min-w-0 space-y-1">

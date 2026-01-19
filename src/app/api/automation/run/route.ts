@@ -63,19 +63,30 @@ export async function POST(req: Request) {
 
         // Parse request body for draftOnly flag and limit
         let draftOnly = false;
-        let limit = settings.videosPerDay; // Default to saved settings
+        let limit = 1; // Default to 1, not database value
+
         try {
             const body = await req.json();
+            console.log('[Automation] Request body received:', JSON.stringify(body));
+
             draftOnly = body?.draftOnly === true;
-            // Use limit from request if provided (current dropdown value)
+
+            // Use limit from request body - this is the current dropdown value
             if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
                 limit = body.limit;
+                console.log(`[Automation] Using limit from request: ${limit}`);
+            } else {
+                // Fall back to database settings only if not provided in body
+                limit = settings.videosPerDay || 1;
+                console.log(`[Automation] Using limit from database: ${limit}`);
             }
-        } catch {
-            // No body or invalid JSON - that's fine, use defaults
+        } catch (parseError) {
+            // No body or invalid JSON - use database settings
+            limit = settings.videosPerDay || 1;
+            console.log(`[Automation] Body parse failed, using database limit: ${limit}`, parseError);
         }
 
-        console.log(`[Automation] Running with limit: ${limit}, draftOnly: ${draftOnly}`);
+        console.log(`[Automation] FINAL VALUES - limit: ${limit}, draftOnly: ${draftOnly}`);
 
         // Run automation
         const result = await runAutomation(
