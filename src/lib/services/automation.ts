@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer } from '@/lib/services/drive';
 import { generateVideoMetadata, generateMetadataFromTranscript } from '@/lib/services/ai';
 import { uploadVideo } from '@/lib/services/youtube';
-import { transcribeAudio, uploadForTranscription } from '@/lib/services/whisper';
+import { uploadAndTranscribe } from '@/lib/services/assemblyai';
 
 export interface AutomationResult {
     processed: number;
@@ -151,51 +151,34 @@ export async function runAutomation(
             // So logic inside getNextScheduleTime is correct.
 
             try {
-                // Generate metadata using AI - try Whisper transcription first
+                // Generate metadata using AI - try AssemblyAI transcription first
                 let metadata;
                 let transcript: string | null = null;
 
-                // Attempt Whisper transcription if REPLICATE_API_TOKEN is set
-                const hasReplicateToken = !!process.env.REPLICATE_API_TOKEN;
-                console.log(`[Automation] REPLICATE_API_TOKEN configured: ${hasReplicateToken}`);
+                // Attempt AssemblyAI transcription if API key is set
+                const hasAssemblyAI = !!process.env.ASSEMBLYAI_API_KEY;
+                console.log(`[Automation] ASSEMBLYAI_API_KEY configured: ${hasAssemblyAI}`);
 
-                if (hasReplicateToken) {
-                    console.log(`[Automation] Attempting quick transcription for: ${file.name}`);
+                if (hasAssemblyAI) {
+                    console.log(`[Automation] Attempting AssemblyAI transcription for: ${file.name}`);
                     try {
-                        // Quick transcription with 8-second timeout (Vercel Hobby has 10s limit)
-                        const transcriptionPromise = (async () => {
-                            // Download only 1MB of video (first few seconds of audio)
-                            const videoBuffer = await downloadFileBuffer(accessToken, file.id, 1 * 1024 * 1024);
+                        // Download video buffer (up to 10MB for transcription)
+                        const videoBuffer = await downloadFileBuffer(accessToken, file.id, 10 * 1024 * 1024);
 
-                            if (videoBuffer && videoBuffer.length > 0) {
-                                console.log(`[Automation] Downloaded ${videoBuffer.length} bytes for transcription`);
-                                // Upload to Replicate for transcription
-                                const fileUrl = await uploadForTranscription(videoBuffer, file.name);
+                        if (videoBuffer && videoBuffer.length > 0) {
+                            console.log(`[Automation] Downloaded ${videoBuffer.length} bytes for transcription`);
 
-                                if (fileUrl) {
-                                    console.log(`[Automation] File uploaded to Replicate, starting Whisper...`);
-                                    // Transcribe with Whisper
-                                    const result = await transcribeAudio(fileUrl);
-                                    return result;
-                                }
+                            // Transcribe with AssemblyAI (faster than Whisper!)
+                            const transcriptionResult = await uploadAndTranscribe(videoBuffer);
+
+                            if (transcriptionResult.success && transcriptionResult.transcript) {
+                                transcript = transcriptionResult.transcript;
+                                console.log(`[Automation] Transcription successful: ${transcript.slice(0, 100)}...`);
+                                // Generate metadata from transcript
+                                metadata = await generateMetadataFromTranscript(transcript, file.name);
+                            } else {
+                                console.log(`[Automation] Transcription failed: ${transcriptionResult.error}`);
                             }
-                            return { success: false, error: 'Failed to prepare file' };
-                        })();
-
-                        // 8 second timeout (leaving 2s buffer for Vercel's 10s limit)
-                        const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
-                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (8s limit for Vercel Hobby)' }), 8000);
-                        });
-
-                        const transcriptionResult = await Promise.race([transcriptionPromise, timeoutPromise]);
-
-                        if (transcriptionResult.success && transcriptionResult.transcript) {
-                            transcript = transcriptionResult.transcript;
-                            console.log(`[Automation] Transcription successful: ${transcript.slice(0, 100)}...`);
-                            // Generate metadata from transcript
-                            metadata = await generateMetadataFromTranscript(transcript, file.name);
-                        } else {
-                            console.log(`[Automation] Transcription failed: ${transcriptionResult.error}`);
                         }
                     } catch (transcriptError) {
                         console.error('[Automation] Transcription error:', transcriptError);
