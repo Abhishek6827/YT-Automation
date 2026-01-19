@@ -940,6 +940,23 @@ export default function Dashboard() {
                 placeholder="shorts, viral, trending, ..."
               />
             </div>
+            
+            {/* Transcript Section */}
+            <div className="space-y-2">
+              <Label className="text-zinc-400 flex items-center gap-2">
+                <span>🎙️</span> Video Transcript
+              </Label>
+              {editingVideo?.transcript ? (
+                <div className="bg-zinc-950 border border-zinc-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                  <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">{editingVideo.transcript}</p>
+                </div>
+              ) : (
+                <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg p-3 text-center">
+                  <p className="text-xs text-zinc-500">No transcript available</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">Transcript is generated from video audio via Whisper AI</p>
+                </div>
+              )}
+            </div>
           </div>
           
           <DialogFooter className="flex-col sm:flex-row gap-2">
