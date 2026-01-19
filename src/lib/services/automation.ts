@@ -156,19 +156,24 @@ export async function runAutomation(
                 let transcript: string | null = null;
 
                 // Attempt Whisper transcription if REPLICATE_API_TOKEN is set
-                if (process.env.REPLICATE_API_TOKEN) {
-                    console.log(`[Automation] Attempting transcription for: ${file.name}`);
+                const hasReplicateToken = !!process.env.REPLICATE_API_TOKEN;
+                console.log(`[Automation] REPLICATE_API_TOKEN configured: ${hasReplicateToken}`);
+
+                if (hasReplicateToken) {
+                    console.log(`[Automation] Attempting quick transcription for: ${file.name}`);
                     try {
-                        // Wrap transcription in a timeout promise (45 seconds max)
+                        // Quick transcription with 8-second timeout (Vercel Hobby has 10s limit)
                         const transcriptionPromise = (async () => {
-                            // Download first 5MB of video (enough for short clips)
-                            const videoBuffer = await downloadFileBuffer(accessToken, file.id, 5 * 1024 * 1024);
+                            // Download only 1MB of video (first few seconds of audio)
+                            const videoBuffer = await downloadFileBuffer(accessToken, file.id, 1 * 1024 * 1024);
 
                             if (videoBuffer && videoBuffer.length > 0) {
+                                console.log(`[Automation] Downloaded ${videoBuffer.length} bytes for transcription`);
                                 // Upload to Replicate for transcription
                                 const fileUrl = await uploadForTranscription(videoBuffer, file.name);
 
                                 if (fileUrl) {
+                                    console.log(`[Automation] File uploaded to Replicate, starting Whisper...`);
                                     // Transcribe with Whisper
                                     const result = await transcribeAudio(fileUrl);
                                     return result;
@@ -177,9 +182,9 @@ export async function runAutomation(
                             return { success: false, error: 'Failed to prepare file' };
                         })();
 
-                        // 20 minute timeout (for longer videos)
+                        // 8 second timeout (leaving 2s buffer for Vercel's 10s limit)
                         const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
-                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (20 min limit)' }), 20 * 60 * 1000);
+                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (8s limit for Vercel Hobby)' }), 8000);
                         });
 
                         const transcriptionResult = await Promise.race([transcriptionPromise, timeoutPromise]);
@@ -203,6 +208,21 @@ export async function runAutomation(
                     metadata = await generateVideoMetadata(file.name);
                 }
 
+                // Use upsert to prevent duplicate records (in case of race condition with concurrent requests)
+                // If driveId already exists, we skip creating a new record
+                const existingCheck = await prisma.video.findUnique({
+                    where: { driveId: file.id }
+                });
+
+                if (existingCheck) {
+                    console.log(`[Automation] Skipping duplicate: ${file.name} (driveId: ${file.id} already exists)`);
+                    result.details.push({
+                        fileName: file.name,
+                        status: 'skipped',
+                    });
+                    continue;
+                }
+
                 // Create record in database (including transcript if available)
                 const videoRecord = await prisma.video.create({
                     data: {
@@ -216,6 +236,8 @@ export async function runAutomation(
                         scheduledFor: draftOnly ? null : scheduleTime,
                     },
                 });
+
+                console.log(`[Automation] Created video record: ${videoRecord.id}, transcript: ${transcript ? 'YES' : 'NO'}`);
 
                 // If draftOnly, stop here - don't download or upload
                 if (draftOnly) {
