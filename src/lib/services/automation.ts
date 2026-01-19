@@ -177,9 +177,9 @@ export async function runAutomation(
                             return { success: false, error: 'Failed to prepare file' };
                         })();
 
-                        // 45 second timeout
+                        // 20 minute timeout (for longer videos)
                         const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
-                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (45s limit)' }), 45000);
+                            setTimeout(() => resolve({ success: false, error: 'Transcription timed out (20 min limit)' }), 20 * 60 * 1000);
                         });
 
                         const transcriptionResult = await Promise.race([transcriptionPromise, timeoutPromise]);
