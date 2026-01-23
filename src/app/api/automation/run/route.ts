@@ -10,91 +10,141 @@ export async function POST(req: Request) {
     let accessToken: string | undefined;
 
     // Check if triggered by Cron (Vercel Cron)
-    // Vercel sends `Authorization: Bearer <CRON_SECRET>` if configured.
-    // Ideally we check common cron headers
     const authHeader = req.headers.get('authorization');
     const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
     if (isCron) {
         console.log('Cron job execution triggered');
-        // Fetch the first user account with Google provider to get refresh token
-        // In a single-user app, this is the admin.
-        const account = await prisma.account.findFirst({
-            where: { provider: 'google' },
-        });
 
-        if (!account?.refresh_token) {
-            return NextResponse.json({ error: 'No google account with refresh token found' }, { status: 401 });
-        }
-
-        // Refresh the token
         try {
-            const { google } = await import('googleapis');
-            const authClient = new google.auth.OAuth2(
-                process.env.GOOGLE_CLIENT_ID,
-                process.env.GOOGLE_CLIENT_SECRET
-            );
-            authClient.setCredentials({ refresh_token: account.refresh_token });
-            const { credentials } = await authClient.refreshAccessToken();
-            accessToken = credentials.access_token || undefined;
+            // Find all unique users who have settings configured (driveFolderLink exists)
+            const allSettings = await prisma.settings.findMany({
+                where: {
+                    driveFolderLink: { not: null },
+                    userId: { not: undefined }
+                },
+                include: {
+                    user: {
+                        include: {
+                            accounts: {
+                                where: { provider: 'google' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            console.log(`[Cron] Found ${allSettings.length} users with configured settings`);
+            const results = [];
+
+            // Iterate over each user and run automation
+            for (const setting of allSettings) {
+                const user = setting.user;
+                if (!user || !user.accounts[0]?.refresh_token) {
+                    console.log(`[Cron] Skipping user ${user?.id}: No Google account/refresh token`);
+                    continue;
+                }
+
+                console.log(`[Cron] Processing user: ${user.id}`);
+
+                // Refresh token for this user
+                let accessToken: string | undefined;
+                try {
+                    const { google } = await import('googleapis');
+                    const authClient = new google.auth.OAuth2(
+                        process.env.GOOGLE_CLIENT_ID,
+                        process.env.GOOGLE_CLIENT_SECRET
+                    );
+                    authClient.setCredentials({ refresh_token: user.accounts[0].refresh_token });
+                    const { credentials } = await authClient.refreshAccessToken();
+                    accessToken = credentials.access_token || undefined;
+                } catch (refreshError) {
+                    console.error(`[Cron] Failed to refresh token for user ${user.id}:`, refreshError);
+                    continue;
+                }
+
+                if (!accessToken) continue;
+
+                // Run automation for this user
+                const result = await runAutomation(
+                    user.id,
+                    accessToken,
+                    setting.driveFolderLink!,
+                    setting.videosPerDay,
+                    setting.uploadHour
+                );
+
+                results.push({ userId: user.id, result });
+            }
+
+            return NextResponse.json({ success: true, processedUsers: results.length, details: results });
         } catch (error) {
-            console.error('Failed to refresh token for cron:', error);
-            return NextResponse.json({ error: 'Failed to refresh token' }, { status: 500 });
+            console.error('Cron job failure:', error);
+            return NextResponse.json({ error: 'Cron job failed' }, { status: 500 });
         }
-    } else {
-        // User session
-        const session = await auth();
-        accessToken = session?.accessToken;
     }
 
-    if (!accessToken) {
+    // Manual Run (User Session)
+    const session = await auth();
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // For manual run, verify active token
+    // Note: session.accessToken might be expired if session is old, but NextAuth usually handles refreshing?
+    // In this repo, session.accessToken seems to be passed from auth().
+    accessToken = session.accessToken;
+
+    if (!accessToken) {
+        return NextResponse.json({ error: 'Unauthorized - No Access Token' }, { status: 401 });
     }
 
     try {
-        // Get settings
-        const settings = await prisma.settings.findFirst({
-            where: { id: 1 },
+        // Get settings for this user
+        const settings = await prisma.settings.findUnique({
+            where: { userId: session.user.id },
         });
 
         if (!settings?.driveFolderLink) {
             return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
         }
 
-        // Parse request body for draftOnly flag and limit
+        // Parse request body
         let draftOnly = false;
-        let limit = 1; // Default to 1, not database value
+        let limit = 1;
+        let scheduleTime: Date | undefined;
 
         try {
             const body = await req.json();
-            console.log('[Automation] Request body received:', JSON.stringify(body));
-
             draftOnly = body?.draftOnly === true;
 
-            // Use limit from request body - this is the current dropdown value
             if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
                 limit = body.limit;
-                console.log(`[Automation] Using limit from request: ${limit}`);
             } else {
-                // Fall back to database settings only if not provided in body
                 limit = settings.videosPerDay || 1;
-                console.log(`[Automation] Using limit from database: ${limit}`);
+            }
+
+            // Parse scheduleTime if present
+            if (body?.scheduleTime) {
+                scheduleTime = new Date(body.scheduleTime);
+                if (isNaN(scheduleTime.getTime())) {
+                    scheduleTime = undefined;
+                }
             }
         } catch (parseError) {
-            // No body or invalid JSON - use database settings
             limit = settings.videosPerDay || 1;
-            console.log(`[Automation] Body parse failed, using database limit: ${limit}`, parseError);
         }
 
-        console.log(`[Automation] FINAL VALUES - limit: ${limit}, draftOnly: ${draftOnly}`);
+        console.log(`[Automation] Manual Run - User: ${session.user.id}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
 
         // Run automation
         const result = await runAutomation(
+            session.user.id,
             accessToken,
             settings.driveFolderLink,
-            limit, // Use parsed limit from request
+            limit,
             settings.uploadHour,
-            draftOnly
+            draftOnly,
+            scheduleTime
         );
 
         return NextResponse.json(result);
@@ -107,13 +157,13 @@ export async function POST(req: Request) {
 // GET /api/automation/status - Get automation status
 export async function GET() {
     const session = await auth();
-    if (!session?.accessToken) {
+    if (!session?.user?.id || !session.accessToken) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        const settings = await prisma.settings.findFirst({
-            where: { id: 1 },
+        const settings = await prisma.settings.findUnique({
+            where: { userId: session.user.id },
         });
 
         if (!settings?.driveFolderLink) {
@@ -125,12 +175,16 @@ export async function GET() {
         }
 
         const pendingCount = await getPendingCount(
+            session.user.id,
             session.accessToken,
             settings.driveFolderLink
         );
 
         const totalUploaded = await prisma.video.count({
-            where: { status: 'UPLOADED' },
+            where: {
+                userId: session.user.id,
+                status: 'UPLOADED'
+            },
         });
 
         return NextResponse.json({

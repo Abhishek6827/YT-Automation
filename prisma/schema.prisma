@@ -10,31 +10,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model Video {
   id          String    @id @default(uuid())
+  userId      String    // Multi-user support
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   driveId     String    @unique
   fileName    String
   title       String?
   description String?
   tags        String?
-  transcript  String?   @db.Text // Whisper transcription for AI metadata
-  status      String    @default("PENDING") // PENDING, PROCESSING, DRAFT, UPLOADED, FAILED
+  transcript  String?   @db.Text
+  status      String    @default("PENDING") 
   youtubeId   String?
   uploadedAt  DateTime?
-  scheduledFor DateTime?
-  // Folder tracking
+  scheduledFor DateTime? 
   folderId    String?
   folderName  String?
-  // Copyright protection
-  visibility  String    @default("unlisted") // unlisted, public, private
-  copyrightStatus String @default("PENDING") // PENDING, CLEAR, CLAIMED
+  visibility  String    @default("unlisted")
+  copyrightStatus String @default("PENDING")
   copyrightCheckedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  
+  copyrightLogs CopyrightLog[]
 }
 
 model Folder {
   id          String   @id @default(uuid())
+  userId      String   // Multi-user support
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   driveId     String   @unique
   name        String
   parentId    String?
@@ -46,7 +51,9 @@ model Folder {
 
 model CopyrightLog {
   id          String   @id @default(uuid())
+  userId      String?  // Optional for backward compatibility but good for filtering
   videoId     String
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
   youtubeId   String
   claimType   String?
   claimStatus String?
@@ -56,14 +63,14 @@ model CopyrightLog {
 
 model Settings {
   id              Int      @id @default(1)
+  userId          String   @unique // One settings per user
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   driveFolderLink String?
-  uploadHour      Int      @default(10) // What hour to upload (0-23)
+  uploadHour      Int      @default(10)
   videosPerDay    Int      @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
-
-
 
 // NextAuth Models
 model Account {
@@ -101,6 +108,10 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
+  
+  videos        Video[]
+  folders       Folder[]
+  settings      Settings?
 }
 
 model VerificationToken {

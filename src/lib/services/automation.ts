@@ -19,10 +19,11 @@ export interface AutomationResult {
 
 // Main automation function - scans Drive, generates metadata, uploads to YouTube
 // Helper to getting next schedule time
-async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Promise<Date> {
-    // Get the last scheduled video
+async function getNextScheduleTime(userId: string, uploadHour: number, videosPerDay: number): Promise<Date> {
+    // Get the last scheduled video for this user
     const lastScheduled = await prisma.video.findFirst({
         where: {
+            userId,
             scheduledFor: {
                 not: null
             }
@@ -38,7 +39,7 @@ async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Pr
     if (lastScheduled?.scheduledFor) {
         const lastDate = new Date(lastScheduled.scheduledFor);
 
-        // Count videos scheduled for that specific date
+        // Count videos scheduled for that specific date for this user
         const startOfLastDate = new Date(lastDate);
         startOfLastDate.setHours(0, 0, 0, 0);
 
@@ -47,6 +48,7 @@ async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Pr
 
         const countOnLastDate = await prisma.video.count({
             where: {
+                userId,
                 scheduledFor: {
                     gte: startOfLastDate,
                     lte: endOfLastDate
@@ -63,11 +65,6 @@ async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Pr
             baseDate.setDate(baseDate.getDate() + 1);
         }
     } else {
-        // No previously scheduled videos. Start from effective "Tomorrow" if current time > upload hour?
-        // Or just today if we haven't passed upload hour?
-        // User wants "Schedule". Usually means future. 
-        // Let's default to Tomorrow @ UploadHour to be safe, or Today if hour is available.
-        // Current logic: Just set hours.
         const now = new Date();
         baseDate.setHours(uploadHour, 0, 0, 0);
 
@@ -76,18 +73,20 @@ async function getNextScheduleTime(uploadHour: number, videosPerDay: number): Pr
         }
     }
 
-    // Ensure strict hour setting (in case baseDate was shifted)
+    // Ensure strict hour setting
     baseDate.setHours(uploadHour, 0, 0, 0);
 
     return baseDate;
 }
 
 export async function runAutomation(
+    userId: string, // New: required userId
     accessToken: string,
     driveFolderLink: string,
     limit: number = 1,
     uploadHour: number = 10,
-    draftOnly: boolean = false  // New: If true, only create drafts with AI metadata
+    draftOnly: boolean = false,
+    customScheduleTime?: Date // New: Allow passing specific schedule time
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -113,8 +112,9 @@ export async function runAutomation(
             return result;
         }
 
-        // Get already processed file IDs from database
+        // Get already processed file IDs from database for this user
         const existingVideos = await prisma.video.findMany({
+            where: { userId },
             select: { driveId: true },
         });
         const processedIds = new Set(existingVideos.map((v: { driveId: string }) => v.driveId));
@@ -127,7 +127,7 @@ export async function runAutomation(
             return result;
         }
 
-        console.log(`[Automation] Total new files: ${newFiles.length}, limit: ${limit}, will process: ${Math.min(newFiles.length, limit)}`);
+        console.log(`[Automation] User ${userId}: Total new files: ${newFiles.length}, limit: ${limit}, will process: ${Math.min(newFiles.length, limit)}`);
 
         // Process up to 'limit' files
         const filesToProcess = newFiles.slice(0, limit);
@@ -136,19 +136,8 @@ export async function runAutomation(
             result.processed++;
 
             // Calculate Schedule Time
-            // We re-calculate for EACH file to handle the increment logic correctly
-            // (getNextScheduleTime queries DB, but we haven't saved the record yet?)
-            // Wait, we need to save the record or pass the previous date.
-            // Better: Calculate in loop.
-            // Actually, querying DB inside loop is slow but safe.
-            // But we insert the record as PROCESSING first.
-            // Let's determine schedule time BEFORE processing loop?
-            // No, strictly sequential. 
-
-            const scheduleTime = await getNextScheduleTime(uploadHour, limit); // Pass limit as videosPerDay approx?
-            // Wait, getNextScheduleTime uses 'limit' as 'videosPerDay'? 
-            // In route.ts, limit PASSED IS settings.videosPerDay.
-            // So logic inside getNextScheduleTime is correct.
+            // If customScheduleTime was passed, use it. Otherwise calculate based on user's schedule.
+            const scheduleTime = customScheduleTime || await getNextScheduleTime(userId, uploadHour, limit);
 
             try {
                 // Generate metadata using AI - try AssemblyAI transcription first
@@ -157,7 +146,6 @@ export async function runAutomation(
 
                 // Attempt AssemblyAI transcription if API key is set
                 const hasAssemblyAI = !!process.env.ASSEMBLYAI_API_KEY;
-                console.log(`[Automation] ASSEMBLYAI_API_KEY configured: ${hasAssemblyAI}`);
 
                 if (hasAssemblyAI) {
                     console.log(`[Automation] Attempting AssemblyAI transcription for: ${file.name}`);
@@ -166,18 +154,12 @@ export async function runAutomation(
                         const videoBuffer = await downloadFileBuffer(accessToken, file.id, 10 * 1024 * 1024);
 
                         if (videoBuffer && videoBuffer.length > 0) {
-                            console.log(`[Automation] Downloaded ${videoBuffer.length} bytes for transcription`);
-
-                            // Transcribe with AssemblyAI (faster than Whisper!)
                             const transcriptionResult = await uploadAndTranscribe(videoBuffer);
 
                             if (transcriptionResult.success && transcriptionResult.transcript) {
                                 transcript = transcriptionResult.transcript;
-                                console.log(`[Automation] Transcription successful: ${transcript.slice(0, 100)}...`);
                                 // Generate metadata from transcript
                                 metadata = await generateMetadataFromTranscript(transcript, file.name);
-                            } else {
-                                console.log(`[Automation] Transcription failed: ${transcriptionResult.error}`);
                             }
                         }
                     } catch (transcriptError) {
@@ -191,14 +173,18 @@ export async function runAutomation(
                     metadata = await generateVideoMetadata(file.name);
                 }
 
-                // Use upsert to prevent duplicate records (in case of race condition with concurrent requests)
-                // If driveId already exists, we skip creating a new record
+                // Double check duplication with userId
                 const existingCheck = await prisma.video.findUnique({
-                    where: { driveId: file.id }
+                    where: { driveId: file.id } // driveId is unique globally or per user? Schema says @unique globally.
+                    // If shared drive folder, different users might process same file?
+                    // Schema has driveId @unique. This implies a video can be processed only once globally?
+                    // This might be a limitation if multiple users use same file.
+                    // But typically users have their own files.
+                    // Keep global unique for now, but ensure we don't crash.
                 });
 
                 if (existingCheck) {
-                    console.log(`[Automation] Skipping duplicate: ${file.name} (driveId: ${file.id} already exists)`);
+                    console.log(`[Automation] Skipping duplicate: ${file.name}`);
                     result.details.push({
                         fileName: file.name,
                         status: 'skipped',
@@ -206,23 +192,22 @@ export async function runAutomation(
                     continue;
                 }
 
-                // Create record in database (including transcript if available)
+                // Create record in database
                 const videoRecord = await prisma.video.create({
                     data: {
+                        userId, // Link to user
                         driveId: file.id,
                         fileName: file.name,
                         status: draftOnly ? 'DRAFT' : 'PROCESSING',
                         title: metadata.title,
                         description: metadata.description,
                         tags: metadata.tags.join(','),
-                        transcript: transcript, // Store transcript for display in UI
+                        transcript: transcript,
                         scheduledFor: draftOnly ? null : scheduleTime,
                     },
                 });
 
-                console.log(`[Automation] Created video record: ${videoRecord.id}, transcript: ${transcript ? 'YES' : 'NO'}`);
-
-                // If draftOnly, stop here - don't download or upload
+                // If draftOnly, stop here
                 if (draftOnly) {
                     result.details.push({
                         fileName: file.name,
@@ -235,14 +220,15 @@ export async function runAutomation(
                 const videoStream = await downloadFile(accessToken, file.id);
 
                 // Upload to YouTube
+                // NOTE: If using customScheduleTime, we set publishAt.
                 const uploadResult = await uploadVideo({
                     accessToken,
                     videoStream,
                     title: metadata.title,
                     description: metadata.description,
                     tags: metadata.tags,
-                    privacyStatus: 'private', // Start with private for safety
-                    publishAt: scheduleTime.toISOString(), // Schedule it!
+                    privacyStatus: 'private',
+                    publishAt: scheduleTime.toISOString(),
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {
@@ -250,7 +236,7 @@ export async function runAutomation(
                     await prisma.video.update({
                         where: { id: videoRecord.id },
                         data: {
-                            status: 'UPLOADED', // Or SCHEDULED?
+                            status: 'UPLOADED',
                             youtubeId: uploadResult.videoId,
                             uploadedAt: new Date(),
                             scheduledFor: scheduleTime,
@@ -300,6 +286,7 @@ export async function runAutomation(
 
 // Get pending videos count
 export async function getPendingCount(
+    userId: string,
     accessToken: string,
     driveFolderLink: string
 ): Promise<number> {
@@ -309,6 +296,7 @@ export async function getPendingCount(
     try {
         const driveFiles = await listVideosFromFolder(accessToken, folderId);
         const existingVideos = await prisma.video.findMany({
+            where: { userId },
             select: { driveId: true },
         });
         const processedIds = new Set(existingVideos.map((v: { driveId: string }) => v.driveId));

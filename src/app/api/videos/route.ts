@@ -4,10 +4,18 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/videos - Get all processed videos
+// GET /api/videos - Get all processed videos (filtered by user)
 export async function GET() {
+    const session = await auth();
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const videos = await prisma.video.findMany({
+            where: {
+                userId: session.user.id
+            },
             orderBy: { createdAt: 'desc' },
             take: 1000,
         });
@@ -22,12 +30,16 @@ export async function GET() {
 // DELETE /api/videos - Clear video history (for testing)
 export async function DELETE() {
     const session = await auth();
-    if (!session) {
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        await prisma.video.deleteMany({});
+        await prisma.video.deleteMany({
+            where: {
+                userId: session.user.id
+            }
+        });
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error clearing videos:', error);

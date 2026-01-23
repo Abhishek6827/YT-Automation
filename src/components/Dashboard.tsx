@@ -248,6 +248,10 @@ export default function Dashboard() {
   const [isCheckingCopyright, setIsCheckingCopyright] = useState(false);
   const [selectedPreviewFile, setSelectedPreviewFile] = useState<{id: string, name: string} | null>(null);
 
+  // Schedule Modal State
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [scheduleDateTime, setScheduleDateTime] = useState('');
+
   // Fetch functions
   const fetchSettings = useCallback(async () => {
     try {
@@ -311,7 +315,7 @@ export default function Dashboard() {
     setIsSaving(false);
   };
 
-  const runAutomation = async (draftOnly: boolean = false) => {
+  const runAutomation = async (draftOnly: boolean = false, customScheduleTime?: Date) => {
     setIsRunning(true);
     setLastResult(null);
     try {
@@ -320,10 +324,15 @@ export default function Dashboard() {
         scanFolderStructure();
       }
       
+      const payload: any = { draftOnly, limit: settings.videosPerDay };
+      if (customScheduleTime) {
+        payload.scheduleTime = customScheduleTime.toISOString();
+      }
+
       const res = await fetch('/api/automation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftOnly, limit: settings.videosPerDay }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -336,6 +345,7 @@ export default function Dashboard() {
         if (settings.driveFolderLink) {
           scanFolderStructure();
         }
+        setIsScheduleOpen(false); // Close modal on success
       }
     } catch (error) {
       console.error('Error running automation:', error);
@@ -827,6 +837,24 @@ export default function Dashboard() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-800">
+                    <Button 
+                        onClick={() => setIsScheduleOpen(true)}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 hover:text-white transition-colors"
+                    >
+                        <span className="mr-2">📅</span> Schedule Output for Later
+                    </Button>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-800">
+                    <Button 
+                        onClick={() => setIsScheduleOpen(true)}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
+                    >
+                        📅 Schedule Output for Later
+                    </Button>
                 </div>
 
                 <div className="pt-2 space-y-3">
@@ -1350,6 +1378,44 @@ export default function Dashboard() {
             ) : null}
             <Button onClick={() => { setDrivePreviewOpen(false); setSelectedPreviewFile(null); }} className="bg-zinc-800 hover:bg-zinc-700 text-white">
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Modal */}
+      <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Schedule Automation</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Select a date and time to schedule the video upload on YouTube.
+              The automation will run now, but videos will be set to 'Private' and scheduled to go public at this time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Publish Date & Time</Label>
+              <Input 
+                type="datetime-local" 
+                value={scheduleDateTime}
+                onChange={(e) => setScheduleDateTime(e.target.value)}
+                className="bg-zinc-950 border-zinc-700 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsScheduleOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white">Cancel</Button>
+            <Button 
+                onClick={() => {
+                    if (scheduleDateTime) {
+                        runAutomation(false, new Date(scheduleDateTime));
+                    }
+                }}
+                disabled={!scheduleDateTime || isRunning}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+                {isRunning ? 'Scheduling...' : 'Run & Schedule'}
             </Button>
           </DialogFooter>
         </DialogContent>

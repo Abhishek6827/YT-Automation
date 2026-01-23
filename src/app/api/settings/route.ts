@@ -4,17 +4,28 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/settings - Get current settings
+// GET /api/settings - Get settings for the current user
 export async function GET() {
+    const session = await auth();
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
-        let settings = await prisma.settings.findFirst({
-            where: { id: 1 },
+        const settings = await prisma.settings.findUnique({
+            where: { userId: session.user.id },
         });
 
         if (!settings) {
-            settings = await prisma.settings.create({
-                data: { id: 1 },
+            // Create default settings if not exists
+            const newSettings = await prisma.settings.create({
+                data: {
+                    userId: session.user.id,
+                    uploadHour: 10,
+                    videosPerDay: 1,
+                },
             });
+            return NextResponse.json(newSettings);
         }
 
         return NextResponse.json(settings);
@@ -25,28 +36,28 @@ export async function GET() {
 }
 
 // POST /api/settings - Update settings
-export async function POST(request: Request) {
+export async function POST(req: Request) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        const body = await request.json();
+        const body = await req.json();
         const { driveFolderLink, uploadHour, videosPerDay } = body;
 
         const settings = await prisma.settings.upsert({
-            where: { id: 1 },
+            where: { userId: session.user.id },
             update: {
                 driveFolderLink,
-                uploadHour: uploadHour ? parseInt(uploadHour) : undefined,
-                videosPerDay: videosPerDay ? parseInt(videosPerDay) : undefined,
+                uploadHour: parseInt(uploadHour),
+                videosPerDay: parseInt(videosPerDay),
             },
             create: {
-                id: 1,
+                userId: session.user.id,
                 driveFolderLink,
-                uploadHour: uploadHour ? parseInt(uploadHour) : 10,
-                videosPerDay: videosPerDay ? parseInt(videosPerDay) : 1,
+                uploadHour: parseInt(uploadHour),
+                videosPerDay: parseInt(videosPerDay),
             },
         });
 
