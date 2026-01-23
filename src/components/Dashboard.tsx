@@ -125,31 +125,84 @@ const EyeIcon = () => (
   </svg>
 );
 
-// Folder Tree Item Component
-const FolderTreeItem = ({ node, level }: { node: { id: string; name: string; videoCount: number; children: { id: string; name: string; videoCount: number; children: unknown[] }[] }; level: number }) => {
-  const [expanded, setExpanded] = useState(true);
+// Enhanced Folder Tree Item Component with upload progress
+interface FolderTreeNode {
+  id: string;
+  name: string;
+  videoCount: number;
+  children: FolderTreeNode[];
+}
+
+const FolderTreeItem = ({ 
+  node, 
+  level, 
+  uploadedVideos,
+  onSelectFolder 
+}: { 
+  node: FolderTreeNode; 
+  level: number;
+  uploadedVideos: Video[];
+  onSelectFolder?: (folderId: string, folderName: string) => void;
+}) => {
+  const [expanded, setExpanded] = useState(level < 2); // Only expand first 2 levels by default
   const hasChildren = node.children && node.children.length > 0;
+  
+  // Count how many videos from this folder have been uploaded
+  const uploadedFromThisFolder = uploadedVideos.filter(v => v.folderName === node.name).length;
+  const hasUploads = uploadedFromThisFolder > 0;
+  
+  // Calculate total videos including nested folders
+  const getTotalVideos = (n: FolderTreeNode): number => {
+    let total = n.videoCount;
+    for (const child of n.children) {
+      total += getTotalVideos(child);
+    }
+    return total;
+  };
+  const totalInTree = getTotalVideos(node);
+  const totalUploaded = uploadedVideos.filter(v => {
+    // Check if video belongs to this folder or any child folder
+    const checkFolder = (n: FolderTreeNode): boolean => {
+      if (v.folderName === n.name) return true;
+      return n.children.some(child => checkFolder(child));
+    };
+    return checkFolder(node);
+  }).length;
   
   return (
     <div>
       <div 
-        className={`flex items-center gap-2 p-1.5 rounded hover:bg-zinc-700/50 cursor-pointer transition-colors`}
+        className={`flex items-center gap-2 p-1.5 rounded hover:bg-zinc-700/50 cursor-pointer transition-colors ${hasUploads ? 'bg-emerald-500/5' : ''}`}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
-        onClick={() => hasChildren && setExpanded(!expanded)}
+        onClick={() => hasChildren ? setExpanded(!expanded) : onSelectFolder?.(node.id, node.name)}
       >
         {hasChildren ? (
-          <span className={`text-zinc-500 transition-transform ${expanded ? 'rotate-90' : ''}`}>▶</span>
+          <span className={`text-zinc-500 transition-transform text-xs ${expanded ? 'rotate-90' : ''}`}>▶</span>
         ) : (
           <span className="w-3" />
         )}
         <FolderIcon />
-        <span className="text-zinc-300 truncate flex-1">{node.name}</span>
-        <span className="text-zinc-500 text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded">
-          {node.videoCount} videos
-        </span>
+        <span className="text-zinc-300 truncate flex-1 text-xs">{node.name}</span>
+        
+        {/* Show upload progress if this folder has videos */}
+        {node.videoCount > 0 ? (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${uploadedFromThisFolder > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+            {uploadedFromThisFolder}/{node.videoCount}
+          </span>
+        ) : totalInTree > 0 ? (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${totalUploaded > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-800 text-zinc-500'}`}>
+            {totalUploaded}/{totalInTree} total
+          </span>
+        ) : null}
       </div>
       {expanded && hasChildren && node.children.map((child) => (
-        <FolderTreeItem key={child.id} node={child as typeof node} level={level + 1} />
+        <FolderTreeItem 
+          key={child.id} 
+          node={child} 
+          level={level + 1}
+          uploadedVideos={uploadedVideos}
+          onSelectFolder={onSelectFolder}
+        />
       ))}
     </div>
   );
@@ -262,6 +315,11 @@ export default function Dashboard() {
     setIsRunning(true);
     setLastResult(null);
     try {
+      // Also scan folder structure to show progress
+      if (settings.driveFolderLink) {
+        scanFolderStructure();
+      }
+      
       const res = await fetch('/api/automation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -274,6 +332,10 @@ export default function Dashboard() {
         setLastResult(data);
         fetchVideos();
         fetchStatus();
+        // Refresh folder structure after processing
+        if (settings.driveFolderLink) {
+          scanFolderStructure();
+        }
       }
     } catch (error) {
       console.error('Error running automation:', error);
@@ -785,14 +847,7 @@ export default function Dashboard() {
                     <PlayIcon /><span className="ml-2">Upload Immediately</span>
                   </Button>
                   
-                  <Button 
-                    onClick={scanFolderStructure}
-                    disabled={isScanningFolders || !settings.driveFolderLink}
-                    variant="outline"
-                    className="w-full border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-300"
-                  >
-                    {isScanningFolders ? <><RefreshIcon spinning /> <span className="ml-2">Scanning Folders...</span></> : <><FolderIcon /><span className="ml-2">Scan Folder Structure</span></>}
-                  </Button>
+
                   
                   <Button onClick={saveSettings} disabled={isSaving} variant="outline" className="w-full border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-300">
                     {isSaving ? 'Saving...' : 'Save Settings'}
@@ -842,7 +897,7 @@ export default function Dashboard() {
                     </div>
                     <ScrollArea className="h-48">
                       <div className="space-y-1 text-xs">
-                        <FolderTreeItem node={folderTree} level={0} />
+                        <FolderTreeItem node={folderTree} level={0} uploadedVideos={videos} />
                       </div>
                     </ScrollArea>
                     <Button 
