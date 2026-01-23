@@ -21,12 +21,30 @@ interface Video {
   title: string | null;
   description: string | null;
   tags: string | null;
-  transcript: string | null; // Whisper transcription
+  transcript: string | null;
   status: string;
   youtubeId: string | null;
   uploadedAt: string | null;
   scheduledFor: string | null;
   createdAt: string;
+  folderId?: string | null;
+  folderName?: string | null;
+  visibility?: string;
+  copyrightStatus?: string;
+}
+
+interface FolderNode {
+  id: string;
+  name: string;
+  videoCount: number;
+  children: FolderNode[];
+  included?: boolean;
+}
+
+interface CopyrightStatus {
+  pending: number;
+  clear: number;
+  claimed: number;
 }
 
 interface Settings {
@@ -107,6 +125,36 @@ const EyeIcon = () => (
   </svg>
 );
 
+// Folder Tree Item Component
+const FolderTreeItem = ({ node, level }: { node: { id: string; name: string; videoCount: number; children: { id: string; name: string; videoCount: number; children: unknown[] }[] }; level: number }) => {
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = node.children && node.children.length > 0;
+  
+  return (
+    <div>
+      <div 
+        className={`flex items-center gap-2 p-1.5 rounded hover:bg-zinc-700/50 cursor-pointer transition-colors`}
+        style={{ paddingLeft: `${level * 16 + 8}px` }}
+        onClick={() => hasChildren && setExpanded(!expanded)}
+      >
+        {hasChildren ? (
+          <span className={`text-zinc-500 transition-transform ${expanded ? 'rotate-90' : ''}`}>▶</span>
+        ) : (
+          <span className="w-3" />
+        )}
+        <FolderIcon />
+        <span className="text-zinc-300 truncate flex-1">{node.name}</span>
+        <span className="text-zinc-500 text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded">
+          {node.videoCount} videos
+        </span>
+      </div>
+      {expanded && hasChildren && node.children.map((child) => (
+        <FolderTreeItem key={child.id} node={child as typeof node} level={level + 1} />
+      ))}
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const [settings, setSettings] = useState<Settings>({ driveFolderLink: '', uploadHour: 10, videosPerDay: 1 });
@@ -135,6 +183,16 @@ export default function Dashboard() {
   const [driveFiles, setDriveFiles] = useState<{id: string, name: string, driveUrl: string}[]>([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
+  
+  // Folder Tree State
+  const [folderTree, setFolderTree] = useState<FolderNode | null>(null);
+  const [totalVideosInDrive, setTotalVideosInDrive] = useState(0);
+  const [isScanningFolders, setIsScanningFolders] = useState(false);
+  const [showFolderTree, setShowFolderTree] = useState(false);
+  
+  // Copyright Status State
+  const [copyrightStatus, setCopyrightStatus] = useState<CopyrightStatus | null>(null);
+  const [isCheckingCopyright, setIsCheckingCopyright] = useState(false);
   const [selectedPreviewFile, setSelectedPreviewFile] = useState<{id: string, name: string} | null>(null);
 
   // Fetch functions
@@ -324,6 +382,66 @@ export default function Dashboard() {
     }
     setIsPreviewLoading(false);
   };
+
+  // Scan folder structure from Drive
+  const scanFolderStructure = async () => {
+    if (!settings.driveFolderLink) return;
+    setIsScanningFolders(true);
+    try {
+      const res = await fetch(`/api/drive/scan?folderLink=${encodeURIComponent(settings.driveFolderLink)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFolderTree(data.root);
+        setTotalVideosInDrive(data.totalVideos);
+        setShowFolderTree(true);
+      } else {
+        const data = await res.json();
+        alert('Failed to scan folders: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error scanning folder structure');
+    }
+    setIsScanningFolders(false);
+  };
+
+  // Check copyright status for eligible videos
+  const checkCopyrightStatus = async () => {
+    setIsCheckingCopyright(true);
+    try {
+      const res = await fetch('/api/videos/check-copyright', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.checked > 0) {
+          alert(`Checked ${data.checked} videos. ${data.madePublic} made public, ${data.flagged} flagged for copyright.`);
+          fetchVideos();
+        } else {
+          alert('No eligible videos to check (must be 24+ hours since upload).');
+        }
+      }
+      // Refresh copyright status
+      const statusRes = await fetch('/api/videos/check-copyright');
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        setCopyrightStatus({ pending: statusData.pending, clear: statusData.clear, claimed: statusData.claimed });
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error checking copyright status');
+    }
+    setIsCheckingCopyright(false);
+  };
+
+  // Fetch copyright status on load
+  const fetchCopyrightStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/videos/check-copyright');
+      if (res.ok) {
+        const data = await res.json();
+        setCopyrightStatus({ pending: data.pending, clear: data.clear, claimed: data.claimed });
+      }
+    } catch (error) { console.error('Error fetching copyright status:', error); }
+  }, []);
 
   const openEditModal = (video: Video) => {
     setEditingVideo(video);
@@ -667,10 +785,76 @@ export default function Dashboard() {
                     <PlayIcon /><span className="ml-2">Upload Immediately</span>
                   </Button>
                   
+                  <Button 
+                    onClick={scanFolderStructure}
+                    disabled={isScanningFolders || !settings.driveFolderLink}
+                    variant="outline"
+                    className="w-full border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-300"
+                  >
+                    {isScanningFolders ? <><RefreshIcon spinning /> <span className="ml-2">Scanning Folders...</span></> : <><FolderIcon /><span className="ml-2">Scan Folder Structure</span></>}
+                  </Button>
+                  
                   <Button onClick={saveSettings} disabled={isSaving} variant="outline" className="w-full border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-300">
                     {isSaving ? 'Saving...' : 'Save Settings'}
                   </Button>
                 </div>
+
+                {/* Copyright Status Section */}
+                {copyrightStatus && (
+                  <div className="rounded-xl p-4 bg-zinc-800/50 border border-zinc-700/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-zinc-300">Copyright Protection</span>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={checkCopyrightStatus}
+                        disabled={isCheckingCopyright}
+                        className="h-7 text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        {isCheckingCopyright ? <RefreshIcon spinning /> : 'Check Now'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <div className="text-amber-400 font-bold">{copyrightStatus.pending}</div>
+                        <div className="text-zinc-500">Pending</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="text-emerald-400 font-bold">{copyrightStatus.clear}</div>
+                        <div className="text-zinc-500">Clear</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                        <div className="text-rose-400 font-bold">{copyrightStatus.claimed}</div>
+                        <div className="text-zinc-500">Claimed</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Folder Tree Preview */}
+                {showFolderTree && folderTree && (
+                  <div className="rounded-xl p-4 bg-zinc-800/50 border border-zinc-700/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-zinc-300">📁 Folder Structure</span>
+                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        {totalVideosInDrive} videos total
+                      </Badge>
+                    </div>
+                    <ScrollArea className="h-48">
+                      <div className="space-y-1 text-xs">
+                        <FolderTreeItem node={folderTree} level={0} />
+                      </div>
+                    </ScrollArea>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => setShowFolderTree(false)}
+                      className="w-full text-xs text-zinc-500 hover:text-zinc-300"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                )}
 
                 {lastResult && (
                   <div className={`rounded-xl p-4 text-sm space-y-2 animate-in fade-in slide-in-from-top-2 duration-300 ${lastResult.failed > 0 ? 'bg-red-500/10 border border-red-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>

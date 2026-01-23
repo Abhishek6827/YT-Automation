@@ -18,12 +18,40 @@ model Video {
   description String?
   tags        String?
   transcript  String?   @db.Text // Whisper transcription for AI metadata
-  status      String    @default("PENDING") // PENDING, PROCESSING, UPLOADED, FAILED
+  status      String    @default("PENDING") // PENDING, PROCESSING, DRAFT, UPLOADED, FAILED
   youtubeId   String?
   uploadedAt  DateTime?
   scheduledFor DateTime?
+  // Folder tracking
+  folderId    String?
+  folderName  String?
+  // Copyright protection
+  visibility  String    @default("unlisted") // unlisted, public, private
+  copyrightStatus String @default("PENDING") // PENDING, CLEAR, CLAIMED
+  copyrightCheckedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model Folder {
+  id          String   @id @default(uuid())
+  driveId     String   @unique
+  name        String
+  parentId    String?
+  videoCount  Int      @default(0)
+  included    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CopyrightLog {
+  id          String   @id @default(uuid())
+  videoId     String
+  youtubeId   String
+  claimType   String?
+  claimStatus String?
+  claimDetails String? @db.Text
+  checkedAt   DateTime @default(now())
 }
 
 model Settings {
@@ -34,6 +62,8 @@ model Settings {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+
 
 // NextAuth Models
 model Account {

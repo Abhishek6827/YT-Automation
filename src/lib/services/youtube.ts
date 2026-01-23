@@ -26,7 +26,16 @@ export interface UploadResult {
     error?: string;
 }
 
-// Upload a video to YouTube
+export interface CopyrightClaimInfo {
+    hasClaims: boolean;
+    claims: {
+        type: string;
+        status: string;
+        contentOwner?: string;
+    }[];
+}
+
+// Upload a video to YouTube (defaults to unlisted for copyright protection)
 export async function uploadVideo(params: UploadVideoParams): Promise<UploadResult> {
     const {
         accessToken,
@@ -34,7 +43,7 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
         title,
         description,
         tags,
-        privacyStatus = 'private', // Default to private for safety
+        privacyStatus = 'unlisted', // Default to unlisted for copyright protection
         categoryId = '22', // Entertainment category
         publishAt,
     } = params;
@@ -153,3 +162,152 @@ export async function updateVideoMetadata(
         };
     }
 }
+
+// Get video status including copyright claims
+export async function getVideoStatus(
+    accessToken: string,
+    videoId: string
+): Promise<{ success: boolean; status?: string; copyrightInfo?: CopyrightClaimInfo; error?: string }> {
+    try {
+        const youtube = createYouTubeClient(accessToken);
+
+        // Get video status
+        const response = await youtube.videos.list({
+            part: ['status', 'contentDetails'],
+            id: [videoId],
+        });
+
+        const video = response.data.items?.[0];
+        if (!video) {
+            return { success: false, error: 'Video not found' };
+        }
+
+        // Check for content claims using the video's status
+        // Note: The YouTube API doesn't directly expose Content ID claims
+        // But we can check the upload status and rejection reasons
+        const uploadStatus = video.status?.uploadStatus;
+        const privacyStatus = video.status?.privacyStatus;
+        const rejectionReason = video.status?.rejectionReason;
+        const contentRating = video.contentDetails?.contentRating;
+
+        // Build copyright info based on available data
+        const copyrightInfo: CopyrightClaimInfo = {
+            hasClaims: false,
+            claims: [],
+        };
+
+        // Check if video was rejected due to copyright
+        if (rejectionReason === 'claim' || rejectionReason === 'copyright') {
+            copyrightInfo.hasClaims = true;
+            copyrightInfo.claims.push({
+                type: 'copyright_rejection',
+                status: rejectionReason,
+            });
+        }
+
+        // Check for age restrictions or other content issues
+        if (contentRating && Object.keys(contentRating).length > 0) {
+            // Has some content rating applied
+            console.log(`[YouTube] Video ${videoId} has content rating:`, contentRating);
+        }
+
+        return {
+            success: true,
+            status: `${uploadStatus}/${privacyStatus}`,
+            copyrightInfo,
+        };
+    } catch (error) {
+        console.error('YouTube status check error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to get video status',
+        };
+    }
+}
+
+// Update video visibility (privacy status)
+export async function updateVideoVisibility(
+    accessToken: string,
+    videoId: string,
+    visibility: 'public' | 'unlisted' | 'private'
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const youtube = createYouTubeClient(accessToken);
+
+        // First get the current video to preserve snippet data
+        const getResponse = await youtube.videos.list({
+            part: ['snippet', 'status'],
+            id: [videoId],
+        });
+
+        const video = getResponse.data.items?.[0];
+        if (!video) {
+            return { success: false, error: 'Video not found' };
+        }
+
+        // Update with new visibility
+        await youtube.videos.update({
+            part: ['status'],
+            requestBody: {
+                id: videoId,
+                status: {
+                    privacyStatus: visibility,
+                    selfDeclaredMadeForKids: video.status?.selfDeclaredMadeForKids || false,
+                },
+            },
+        });
+
+        console.log(`[YouTube] Updated video ${videoId} visibility to ${visibility}`);
+        return { success: true };
+    } catch (error) {
+        console.error('YouTube visibility update error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to update visibility',
+        };
+    }
+}
+
+// Get list of uploaded videos with their status
+export async function getUploadedVideos(
+    accessToken: string,
+    maxResults: number = 50
+): Promise<{ videos: { id: string; title: string; status: string; publishedAt: string }[]; error?: string }> {
+    try {
+        const youtube = createYouTubeClient(accessToken);
+
+        // Get the uploads playlist
+        const channelResponse = await youtube.channels.list({
+            part: ['contentDetails'],
+            mine: true,
+        });
+
+        const uploadsPlaylistId = channelResponse.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+        if (!uploadsPlaylistId) {
+            return { videos: [], error: 'Could not find uploads playlist' };
+        }
+
+        // Get videos from uploads playlist
+        const playlistResponse = await youtube.playlistItems.list({
+            part: ['snippet', 'status'],
+            playlistId: uploadsPlaylistId,
+            maxResults,
+        });
+
+        const videos = (playlistResponse.data.items || []).map(item => ({
+            id: item.snippet?.resourceId?.videoId || '',
+            title: item.snippet?.title || '',
+            status: item.status?.privacyStatus || 'unknown',
+            publishedAt: item.snippet?.publishedAt || '',
+        }));
+
+        return { videos };
+    } catch (error) {
+        console.error('Error getting uploaded videos:', error);
+        return {
+            videos: [],
+            error: error instanceof Error ? error.message : 'Failed to get videos',
+        };
+    }
+}
+

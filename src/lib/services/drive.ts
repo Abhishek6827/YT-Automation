@@ -38,6 +38,119 @@ export interface DriveFile {
     mimeType: string;
     size?: string;
     createdTime?: string;
+    folderId?: string;
+    folderName?: string;
+}
+
+export interface FolderNode {
+    id: string;
+    name: string;
+    videoCount: number;
+    children: FolderNode[];
+    included?: boolean;
+}
+
+export interface FolderScanResult {
+    root: FolderNode;
+    totalVideos: number;
+    allFiles: DriveFile[];
+}
+
+// Get folder name by ID
+export async function getFolderName(accessToken: string, folderId: string): Promise<string> {
+    try {
+        const drive = createDriveClient(accessToken);
+        const response = await drive.files.get({
+            fileId: folderId,
+            fields: 'name',
+        });
+        return response.data.name || 'Root Folder';
+    } catch {
+        return 'Root Folder';
+    }
+}
+
+// Scan folder structure and return tree with video counts
+export async function scanFolderStructure(
+    accessToken: string,
+    folderId: string
+): Promise<FolderScanResult> {
+    const drive = createDriveClient(accessToken);
+    const allFiles: DriveFile[] = [];
+
+    async function scanFolder(currentFolderId: string, folderName: string): Promise<FolderNode> {
+        const node: FolderNode = {
+            id: currentFolderId,
+            name: folderName,
+            videoCount: 0,
+            children: [],
+            included: true,
+        };
+
+        try {
+            // Count videos in current folder
+            let pageToken: string | undefined;
+            do {
+                const videoResponse = await drive.files.list({
+                    q: `'${currentFolderId}' in parents and (mimeType contains 'video/') and trashed = false`,
+                    fields: 'nextPageToken, files(id, name, mimeType, size, createdTime)',
+                    orderBy: 'name',
+                    pageSize: 1000,
+                    pageToken,
+                });
+
+                const videos = (videoResponse.data.files || []) as DriveFile[];
+                videos.forEach(v => {
+                    v.folderId = currentFolderId;
+                    v.folderName = folderName;
+                });
+                allFiles.push(...videos);
+                node.videoCount += videos.length;
+                pageToken = videoResponse.data.nextPageToken || undefined;
+            } while (pageToken);
+
+            // Get subfolders
+            const folderResponse = await drive.files.list({
+                q: `'${currentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+                fields: 'files(id, name)',
+                orderBy: 'name',
+                pageSize: 100,
+            });
+
+            const subfolders = folderResponse.data.files || [];
+
+            // Recursively scan subfolders
+            for (const subfolder of subfolders) {
+                if (subfolder.id && subfolder.name) {
+                    const childNode = await scanFolder(subfolder.id, subfolder.name);
+                    node.children.push(childNode);
+                }
+            }
+        } catch (error) {
+            console.error(`[Drive] Error scanning folder ${currentFolderId}:`, error);
+        }
+
+        return node;
+    }
+
+    // Get root folder name
+    const rootName = await getFolderName(accessToken, folderId);
+    const root = await scanFolder(folderId, rootName);
+
+    // Calculate total videos (including nested)
+    function countTotalVideos(node: FolderNode): number {
+        let total = node.videoCount;
+        for (const child of node.children) {
+            total += countTotalVideos(child);
+        }
+        return total;
+    }
+
+    return {
+        root,
+        totalVideos: countTotalVideos(root),
+        allFiles,
+    };
 }
 
 // List video files from a folder (recursively)
@@ -45,13 +158,16 @@ export async function listVideosFromFolder(
     accessToken: string,
     folderId: string,
     depth: number = 0,
-    maxDepth: number = 2
+    maxDepth: number = 10
 ): Promise<DriveFile[]> {
     console.log(`[Drive] Listing videos from folder: ${folderId} (Depth: ${depth})`);
     const drive = createDriveClient(accessToken);
     let allVideos: DriveFile[] = [];
 
     try {
+        // Get folder name for tracking
+        const folderName = await getFolderName(accessToken, folderId);
+
         // 1. Search for videos in current folder
         let pageToken: string | undefined;
 
@@ -65,6 +181,11 @@ export async function listVideosFromFolder(
             });
 
             const videos = (videoResponse.data.files || []) as DriveFile[];
+            // Add folder info to each video
+            videos.forEach(v => {
+                v.folderId = folderId;
+                v.folderName = folderName;
+            });
             allVideos = [...allVideos, ...videos];
             pageToken = videoResponse.data.nextPageToken || undefined;
         } while (pageToken);
@@ -76,7 +197,7 @@ export async function listVideosFromFolder(
             const folderResponse = await drive.files.list({
                 q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
                 fields: 'files(id, name)',
-                pageSize: 20,
+                pageSize: 100,
             });
 
             const subfolders = folderResponse.data.files || [];
@@ -159,3 +280,4 @@ export async function downloadFileBuffer(
         throw error;
     }
 }
+
