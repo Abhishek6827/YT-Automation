@@ -97,9 +97,12 @@ export async function scanFolderStructure(
                     orderBy: 'name',
                     pageSize: 1000,
                     pageToken,
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true,
                 });
 
                 const videos = (videoResponse.data.files || []) as DriveFile[];
+                console.log(`[Drive] Found ${videos.length} videos in folder "${folderName}" (${currentFolderId})`);
                 videos.forEach(v => {
                     v.folderId = currentFolderId;
                     v.folderName = folderName;
@@ -110,22 +113,30 @@ export async function scanFolderStructure(
             } while (pageToken);
 
             // Get subfolders
-            const folderResponse = await drive.files.list({
-                q: `'${currentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: 'files(id, name)',
-                orderBy: 'name',
-                pageSize: 100,
-            });
+            let folderPageToken: string | undefined;
+            do {
+                const folderResponse = await drive.files.list({
+                    q: `'${currentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+                    fields: 'nextPageToken, files(id, name)',
+                    orderBy: 'name',
+                    pageSize: 100,
+                    pageToken: folderPageToken,
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true,
+                });
 
-            const subfolders = folderResponse.data.files || [];
+                const subfolders = folderResponse.data.files || [];
+                console.log(`[Drive] Found ${subfolders.length} subfolders in "${folderName}"`);
 
-            // Recursively scan subfolders
-            for (const subfolder of subfolders) {
-                if (subfolder.id && subfolder.name) {
-                    const childNode = await scanFolder(subfolder.id, subfolder.name);
-                    node.children.push(childNode);
+                // Recursively scan subfolders
+                for (const subfolder of subfolders) {
+                    if (subfolder.id && subfolder.name) {
+                        const childNode = await scanFolder(subfolder.id, subfolder.name);
+                        node.children.push(childNode);
+                    }
                 }
-            }
+                folderPageToken = folderResponse.data.nextPageToken || undefined;
+            } while (folderPageToken);
         } catch (error) {
             console.error(`[Drive] Error scanning folder ${currentFolderId}:`, error);
         }
@@ -176,8 +187,10 @@ export async function listVideosFromFolder(
                 q: `'${folderId}' in parents and (mimeType contains 'video/') and trashed = false`,
                 fields: 'nextPageToken, files(id, name, mimeType, size, createdTime)',
                 orderBy: 'createdTime desc',
-                pageSize: 1000, // Increase page size to 1000
+                pageSize: 1000,
                 pageToken,
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true,
             });
 
             const videos = (videoResponse.data.files || []) as DriveFile[];
@@ -198,6 +211,8 @@ export async function listVideosFromFolder(
                 q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
                 fields: 'files(id, name)',
                 pageSize: 100,
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true,
             });
 
             const subfolders = folderResponse.data.files || [];
