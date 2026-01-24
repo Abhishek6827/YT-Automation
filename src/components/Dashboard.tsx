@@ -14,6 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// Helper to ensure requests include cookies (NextAuth session)
+const apiFetch = (input: RequestInfo, init?: RequestInit) => {
+  return fetch(input, { credentials: 'include', ...(init || {}) } as RequestInit);
+};
+
 interface Video {
   id: string;
   driveId: string;
@@ -255,7 +260,7 @@ export default function Dashboard() {
   // Fetch functions
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await apiFetch('/api/settings');
       if (res.ok) {
         const data = await res.json();
         if (data) setSettings(data);
@@ -265,7 +270,7 @@ export default function Dashboard() {
 
   const fetchVideos = useCallback(async () => {
     try {
-      const res = await fetch('/api/videos');
+      const res = await apiFetch('/api/videos');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) setVideos(data);
@@ -275,7 +280,7 @@ export default function Dashboard() {
 
   const fetchChannel = useCallback(async () => {
     try {
-      const res = await fetch('/api/channel');
+      const res = await apiFetch('/api/channel');
       if (res.ok) {
         const data = await res.json();
         if (data && !data.error) setChannel(data);
@@ -285,7 +290,7 @@ export default function Dashboard() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/automation/run');
+      const res = await apiFetch('/api/automation/run');
       if (res.ok) {
         const data = await res.json();
         setPendingCount(data.pendingCount || 0);
@@ -305,7 +310,7 @@ export default function Dashboard() {
   const saveSettings = async () => {
     setIsSaving(true);
     try {
-      await fetch('/api/settings', {
+      await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -329,7 +334,7 @@ export default function Dashboard() {
         payload.scheduleTime = customScheduleTime.toISOString();
       }
 
-      const res = await fetch('/api/automation/run', {
+      const res = await apiFetch('/api/automation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -360,7 +365,7 @@ export default function Dashboard() {
     setDeleteConfirmVideo(null);
     setIsDeleting(id);
     try {
-      const res = await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/videos/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setVideos(prev => prev.filter(v => v.id !== id));
         // Remove from selection if present
@@ -410,7 +415,7 @@ export default function Dashboard() {
     for (const id of videosToDelete) {
       setIsDeleting(id);
       try {
-        const res = await fetch(`/api/videos/${id}`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/videos/${id}`, { method: 'DELETE' });
         if (res.ok) {
           successCount++;
           // Remove from local state immediately on success
@@ -440,7 +445,7 @@ export default function Dashboard() {
     setDrivePreviewOpen(true);
     setIsPreviewLoading(true);
     try {
-      const res = await fetch('/api/automation/preview');
+      const res = await apiFetch('/api/automation/preview');
       if (res.ok) {
         const data = await res.json();
         setDriveFiles(data.files || []);
@@ -460,7 +465,7 @@ export default function Dashboard() {
     if (!settings.driveFolderLink) return;
     setIsScanningFolders(true);
     try {
-      const res = await fetch(`/api/drive/scan?folderLink=${encodeURIComponent(settings.driveFolderLink)}`);
+      const res = await apiFetch(`/api/drive/scan?folderLink=${encodeURIComponent(settings.driveFolderLink)}`);
       if (res.ok) {
         const data = await res.json();
         setFolderTree(data.root);
@@ -481,7 +486,7 @@ export default function Dashboard() {
   const checkCopyrightStatus = async () => {
     setIsCheckingCopyright(true);
     try {
-      const res = await fetch('/api/videos/check-copyright', { method: 'POST' });
+      const res = await apiFetch('/api/videos/check-copyright', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         if (data.checked > 0) {
@@ -492,7 +497,7 @@ export default function Dashboard() {
         }
       }
       // Refresh copyright status
-      const statusRes = await fetch('/api/videos/check-copyright');
+      const statusRes = await apiFetch('/api/videos/check-copyright');
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         setCopyrightStatus({ pending: statusData.pending, clear: statusData.clear, claimed: statusData.claimed });
@@ -507,7 +512,7 @@ export default function Dashboard() {
   // Fetch copyright status on load
   const fetchCopyrightStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/videos/check-copyright');
+      const res = await apiFetch('/api/videos/check-copyright');
       if (res.ok) {
         const data = await res.json();
         setCopyrightStatus({ pending: data.pending, clear: data.clear, claimed: data.claimed });
@@ -524,7 +529,7 @@ export default function Dashboard() {
     if (!editingVideo) return;
     setIsSavingEdit(true);
     try {
-      const res = await fetch(`/api/videos/${editingVideo.id}`, {
+      const res = await apiFetch(`/api/videos/${editingVideo.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -550,7 +555,7 @@ export default function Dashboard() {
     setIsRegenerating(true);
     try {
       console.log('Regenerating metadata for:', editingVideo.fileName);
-      const res = await fetch('/api/ai/regenerate', {
+      const res = await apiFetch('/api/ai/regenerate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: editingVideo.fileName })
@@ -576,7 +581,7 @@ export default function Dashboard() {
 
   const approveVideo = async (video: Video) => {
     try {
-      await fetch(`/api/videos/${video.id}`, {
+      await apiFetch(`/api/videos/${video.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PENDING' })
