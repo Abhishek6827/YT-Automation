@@ -7,12 +7,13 @@ export const dynamic = 'force-dynamic';
 // GET /api/channel - Get YouTube channel info
 export async function GET() {
     const session = await auth();
-    if (!session?.accessToken) {
+    const token = session?.accessToken;
+    if (!token) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        const channel = await getChannelInfo(session.accessToken);
+        const channel = await getChannelInfo(token);
 
         if (!channel) {
             return NextResponse.json({ error: 'No channel found' }, { status: 404 });

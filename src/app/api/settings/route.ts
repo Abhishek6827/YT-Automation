@@ -26,14 +26,14 @@ export async function GET() {
 
     try {
         const settings = await prisma.settings.findUnique({
-            where: { userId: session.user.id },
+            where: { userId: effectiveUserId },
         });
 
         if (!settings) {
             // Create default settings if not exists
             const newSettings = await prisma.settings.create({
                 data: {
-                    userId: session.user.id,
+                    userId: effectiveUserId,
                     uploadHour: 10,
                     videosPerDay: 1,
                 },
