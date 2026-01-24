@@ -101,22 +101,25 @@ export async function POST(req: Request) {
         }
     }
 
-    if (!effectiveUserId) {
+    if (!effectiveUserId || !session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // For manual run, verify active token
     // Note: session.accessToken might be expired if session is old, but NextAuth usually handles refreshing?
     // In this repo, session.accessToken seems to be passed from auth().
-    accessToken = session.accessToken;
+    accessToken = session!.accessToken;
 
     if (!accessToken) {
         return NextResponse.json({ error: 'Unauthorized - No Access Token' }, { status: 401 });
     }
 
+    // Safe to access session.user.id now
+    const userId = session!.user!.id!;
+
     try {
         // Get settings for this user
         const settings = await prisma.settings.findUnique({
-            where: { userId: session.user.id },
+            where: { userId },
         });
 
         if (!settings?.driveFolderLink) {
@@ -149,11 +152,11 @@ export async function POST(req: Request) {
             limit = settings.videosPerDay || 1;
         }
 
-        console.log(`[Automation] Manual Run - User: ${session.user.id}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
+        console.log(`[Automation] Manual Run - User: ${userId}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
 
         // Run automation
         const result = await runAutomation(
-            session.user.id,
+            userId,
             accessToken,
             settings.driveFolderLink,
             limit,
@@ -186,13 +189,17 @@ export async function GET() {
         }
     }
 
-    if (!effectiveUserId || !session.accessToken) {
+    if (!effectiveUserId || !session?.accessToken || !session.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Now we can safely assert session.user.id because we checked it above
+    const userId = session.user.id;
+    const accessToken = session.accessToken;
+
     try {
         const settings = await prisma.settings.findUnique({
-            where: { userId: session.user.id },
+            where: { userId },
         });
 
         if (!settings?.driveFolderLink) {
@@ -204,14 +211,14 @@ export async function GET() {
         }
 
         const pendingCount = await getPendingCount(
-            session.user.id,
-            session.accessToken,
+            userId,
+            accessToken,
             settings.driveFolderLink
         );
 
         const totalUploaded = await prisma.video.count({
             where: {
-                userId: session.user.id,
+                userId,
                 status: 'UPLOADED'
             },
         });
