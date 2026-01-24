@@ -1,16 +1,21 @@
 import { google } from 'googleapis';
 
-// Extract folder ID from Google Drive link
+// Extract folder or file ID from Google Drive link
 export function extractFolderId(link: string): string | null {
     // Handles formats like:
     // https://drive.google.com/drive/folders/FOLDER_ID
-    // https://drive.google.com/drive/folders/FOLDER_ID?usp=sharing
-    // https://drive.google.com/open?id=FOLDER_ID
+    // https://drive.google.com/drive/u/0/folders/FOLDER_ID
+    // https://drive.google.com/file/d/FILE_ID/view
+    // https://drive.google.com/open?id=ID
 
     const folderRegex = /\/folders\/([a-zA-Z0-9_-]+)/;
+    const fileRegex = /\/file\/d\/([a-zA-Z0-9_-]+)/;
     const idRegex = /[?&]id=([a-zA-Z0-9_-]+)/;
 
     let match = link.match(folderRegex);
+    if (match) return match[1];
+
+    match = link.match(fileRegex);
     if (match) return match[1];
 
     match = link.match(idRegex);

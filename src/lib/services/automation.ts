@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer } from '@/lib/services/drive';
+import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer, getFileMetadata, DriveFile } from '@/lib/services/drive';
 import { generateVideoMetadata, generateMetadataFromTranscript } from '@/lib/services/ai';
 import { uploadVideo } from '@/lib/services/youtube';
 import { uploadAndTranscribe } from '@/lib/services/assemblyai';
@@ -97,18 +97,41 @@ export async function runAutomation(
     };
 
     try {
-        // Extract folder ID from the link
-        const folderId = extractFolderId(driveFolderLink);
-        if (!folderId) {
-            result.errors.push('Invalid Google Drive folder link');
+        // Extract folder/file ID from the link
+        const driveId = extractFolderId(driveFolderLink);
+        if (!driveId) {
+            result.errors.push('Invalid Google Drive link');
             return result;
         }
 
-        // Get list of videos from Drive
-        const driveFiles = await listVideosFromFolder(accessToken, folderId);
+        // Check if it's a file or folder
+        let driveFiles: DriveFile[] = [];
+        try {
+            const metadata = await getFileMetadata(accessToken, driveId);
+
+            if (metadata.mimeType === 'application/vnd.google-apps.folder') {
+                // It's a folder, list videos
+                driveFiles = await listVideosFromFolder(accessToken, driveId);
+            } else if (metadata.mimeType.startsWith('video/')) {
+                // It's a single video file
+                console.log(`[Automation] Processing single file: ${metadata.name}`);
+                driveFiles = [{
+                    ...metadata,
+                    folderId: 'single_file',
+                    folderName: 'Direct Link'
+                }];
+            } else {
+                result.errors.push(`Link is neither a folder nor a video file (Type: ${metadata.mimeType})`);
+                return result;
+            }
+        } catch (error) {
+            console.error('[Automation] Error checking drive link:', error);
+            result.errors.push('Failed to access Drive link (check permissions)');
+            return result;
+        }
 
         if (driveFiles.length === 0) {
-            result.errors.push('No video files found in the folder');
+            result.errors.push('No video files found');
             return result;
         }
 

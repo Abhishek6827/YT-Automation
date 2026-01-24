@@ -391,12 +391,6 @@ export default function Dashboard() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
 
-  // Folder Tree State
-  const [folderTree, setFolderTree] = useState<FolderNode | null>(null);
-  const [totalVideosInDrive, setTotalVideosInDrive] = useState(0);
-  const [isScanningFolders, setIsScanningFolders] = useState(false);
-  const [showFolderTree, setShowFolderTree] = useState(false);
-
   // Copyright Status State
   const [copyrightStatus, setCopyrightStatus] =
     useState<CopyrightStatus | null>(null);
@@ -492,7 +486,7 @@ export default function Dashboard() {
     try {
       // Also scan folder structure to show progress
       if (settings.driveFolderLink) {
-        scanFolderStructure();
+        // scanFolderStructure(); // Removed
       }
 
       const payload: any = { draftOnly, limit: settings.videosPerDay };
@@ -518,10 +512,7 @@ export default function Dashboard() {
         setLastResult(data);
         fetchVideos();
         fetchStatus();
-        // Refresh folder structure after processing
-        if (settings.driveFolderLink) {
-          scanFolderStructure();
-        }
+        fetchStatus();
         setIsScheduleOpen(false); // Close modal on success
       }
     } catch (error) {
@@ -646,29 +637,7 @@ export default function Dashboard() {
     setIsPreviewLoading(false);
   };
 
-  // Scan folder structure from Drive
-  const scanFolderStructure = async () => {
-    if (!settings.driveFolderLink) return;
-    setIsScanningFolders(true);
-    try {
-      const res = await apiFetch(
-        `/api/drive/scan?folderLink=${encodeURIComponent(settings.driveFolderLink)}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setFolderTree(data.root);
-        setTotalVideosInDrive(data.totalVideos);
-        setShowFolderTree(true);
-      } else {
-        const data = await res.json();
-        alert("Failed to scan folders: " + (data.error || "Unknown error"));
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error scanning folder structure");
-    }
-    setIsScanningFolders(false);
-  };
+
 
   // Check copyright status for eligible videos
   const checkCopyrightStatus = async () => {
@@ -1152,7 +1121,9 @@ export default function Dashboard() {
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                    <FolderIcon />
+                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
                   </div>
                   <div>
                     <CardTitle className="text-lg text-white">
@@ -1167,7 +1138,7 @@ export default function Dashboard() {
               <CardContent className="space-y-5">
                 <div className="space-y-2">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                    Drive Folder URL
+                    Drive Link (File or Folder)
                   </Label>
                   <Input
                     value={settings.driveFolderLink || ""}
@@ -1178,7 +1149,7 @@ export default function Dashboard() {
                       })
                     }
                     className="bg-zinc-950 border-zinc-700 text-zinc-300 focus:border-blue-500"
-                    placeholder="https://drive.google.com/drive/folders/..."
+                    placeholder="https://drive.google.com/..."
                   />
                   <div className="flex justify-end">
                     <Button
@@ -1242,14 +1213,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-zinc-800">
-                  <Button
-                    onClick={() => setIsScheduleOpen(true)}
-                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 hover:text-white transition-colors"
-                  >
-                    <span className="mr-2">📅</span> Schedule Output for Later
-                  </Button>
-                </div>
+
 
                 <div className="pt-2 border-t border-zinc-800">
                   <Button
@@ -1275,7 +1239,7 @@ export default function Dashboard() {
                       <>
                         <SparklesIcon />
                         <span className="ml-2">
-                          Scan & Generate AI Metadata
+                          Fetch & Create Draft
                         </span>
                       </>
                     )}
@@ -1345,36 +1309,7 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Folder Tree Preview */}
-                {showFolderTree && folderTree && (
-                  <div className="rounded-xl p-4 bg-zinc-800/50 border border-zinc-700/50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-zinc-300">
-                        📁 Folder Structure
-                      </span>
-                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
-                        {totalVideosInDrive} videos total
-                      </Badge>
-                    </div>
-                    <ScrollArea className="h-48">
-                      <div className="space-y-1 text-xs">
-                        <FolderTreeItem
-                          node={folderTree}
-                          level={0}
-                          uploadedVideos={videos}
-                        />
-                      </div>
-                    </ScrollArea>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setShowFolderTree(false)}
-                      className="w-full text-xs text-zinc-500 hover:text-zinc-300"
-                    >
-                      Close
-                    </Button>
-                  </div>
-                )}
+
 
                 {lastResult && (
                   <div
