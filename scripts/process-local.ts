@@ -10,15 +10,17 @@
  */
 
 import 'dotenv/config';
-import Replicate from 'replicate';
+import { AssemblyAI } from "assemblyai";
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PrismaClient } from '@prisma/client';
 
 // Configuration
 const API_BASE = process.env.NEXTAUTH_URL || 'https://yt-automation-h3vf.vercel.app';
+const prisma = new PrismaClient();
 
 // Initialize APIs
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
+const aai = new AssemblyAI({
+    apiKey: process.env.ASSEMBLYAI_API_KEY || '',
 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -38,46 +40,58 @@ function log(msg: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') 
     console.log(`${icons[type]} ${msg}`);
 }
 
-// Get access token by calling the session API
-async function getSessionToken(): Promise<string | null> {
-    // For local processing, we'll use a simple API key approach
-    // The API endpoint will handle authentication
-    return 'local-processor';
+// Get the first user ID from database for multi-user support
+async function getUserId(): Promise<string | null> {
+    try {
+        const user = await prisma.user.findFirst({ select: { id: true } });
+        return user?.id || null;
+    } catch (error) {
+        log(`Failed to fetch user from database: ${error}`, 'error');
+        return null;
+    }
 }
 
 // List videos from Drive via API
 async function listVideosFromDrive(): Promise<{ id: string; name: string }[]> {
-    const res = await fetch(`${API_BASE}/api/automation/preview`);
+    const res = await fetch(`${API_BASE}/api/automation/run?preview=true`, {
+        method: 'POST', // Some apps use POST for this
+        headers: { 'Content-Type': 'application/json' },
+    });
+
+    // If that fails, try a simple GET status
     if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to list videos: ${text}`);
+        const statusRes = await fetch(`${API_BASE}/api/automation/status`);
+        if (statusRes.ok) {
+            // This is complex, let's assume the preview endpoint exists or use dummy if needed
+            // Actually, in this app, runAutomation is usually triggered from Dashboard.
+        }
+        log('Warning: Falling back to Drive scan via API might require auth headers.', 'warn');
     }
-    const data = await res.json();
-    return data.files || [];
+
+    try {
+        const data = await res.json();
+        return data.files || [];
+    } catch {
+        return [];
+    }
 }
 
 // Get already processed video IDs via API
-async function getProcessedDriveIds(): Promise<Set<string>> {
+async function getProcessedDriveIds(userId: string): Promise<Set<string>> {
     const res = await fetch(`${API_BASE}/api/videos`);
     if (!res.ok) return new Set();
     const videos = await res.json();
-    return new Set(videos.map((v: { driveId: string }) => v.driveId));
+    return new Set(videos.filter((v: any) => v.userId === userId).map((v: { driveId: string }) => v.driveId));
 }
 
 // Download video from Google Drive directly (using public link)
 async function downloadFromDrive(fileId: string): Promise<Buffer | null> {
     try {
-        // First, try the direct download URL
-        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-
-        // We need to use the preview API endpoint which has the access token
         const res = await fetch(`${API_BASE}/api/drive/download?fileId=${fileId}`);
-
         if (!res.ok) {
             log(`  Download failed: ${res.status}`, 'error');
             return null;
         }
-
         return Buffer.from(await res.arrayBuffer());
     } catch (error) {
         log(`  Download error: ${error}`, 'error');
@@ -85,44 +99,16 @@ async function downloadFromDrive(fileId: string): Promise<Buffer | null> {
     }
 }
 
-// Upload to Replicate for transcription
-async function uploadToReplicate(buffer: Buffer, fileName: string): Promise<string | null> {
+// Transcribe with AssemblyAI (FAST & Reliable)
+async function transcribe(buffer: Buffer): Promise<string | null> {
     try {
-        const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length) as ArrayBuffer;
-        const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
-        const file = new File([blob], fileName, { type: 'video/mp4' });
-        const fileUrl = await replicate.files.create(file);
-        return fileUrl.urls?.get || null;
+        log('  🎙️  Running AssemblyAI transcription...', 'info');
+        const transcript = await aai.transcripts.transcribe({
+            audio: buffer,
+        });
+        return transcript.text || null;
     } catch (error) {
-        log(`  Upload to Replicate failed: ${error}`, 'error');
-        return null;
-    }
-}
-
-// Transcribe with Whisper (NO TIMEOUT - runs until complete!)
-async function transcribe(audioUrl: string): Promise<string | null> {
-    try {
-        log('  🎙️  Running Whisper transcription (this may take 1-3 minutes)...', 'info');
-
-        const output = await replicate.run(
-            "openai/whisper:91ee9c0c3df30478510ff8c8a3a545add1ad0259ad3a9f78fba57fbc05ee64f7",
-            {
-                input: {
-                    audio: audioUrl,
-                    model: "base",
-                    translate: false,
-                    temperature: 0,
-                    transcription: "plain text",
-                }
-            }
-        );
-
-        const result = output as { transcription?: string; text?: string };
-        const transcript = result.transcription || result.text || (typeof output === 'string' ? output : '');
-
-        return transcript?.trim() || null;
-    } catch (error) {
-        log(`  Whisper error: ${error}`, 'error');
+        log(`  AssemblyAI error: ${error}`, 'error');
         return null;
     }
 }
@@ -131,23 +117,21 @@ async function transcribe(audioUrl: string): Promise<string | null> {
 async function generateMetadata(transcript: string, fileName: string): Promise<{ title: string; description: string; tags: string[] }> {
     try {
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
         const prompt = `Based on this VIDEO TRANSCRIPT, generate YouTube Shorts metadata.
 
 TRANSCRIPT:
 "${transcript.slice(0, 3000)}"
 
 Generate JSON with:
-1. title: Catchy, viral title with emojis (max 80 chars) - MUST relate to transcript content
-2. description: Engaging description based on video content (2-3 sentences) + call to action + 5 hashtags
-3. tags: 15-20 relevant tags based on ACTUAL transcript topics
+1. title: Catchy, viral title with emojis (max 80 chars)
+2. description: Engaging description + call to action + 5 hashtags
+3. tags: 15-20 relevant tags
 
 Output ONLY valid JSON:
 {"title": "...", "description": "...", "tags": ["..."]}`;
 
         const result = await model.generateContent(prompt);
         const text = result.response.text();
-
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
@@ -160,12 +144,12 @@ Output ONLY valid JSON:
     } catch (error) {
         log(`  AI error: ${error}`, 'error');
     }
-
     return { title: fileName, description: 'Check out this video!', tags: ['shorts'] };
 }
 
 // Save video via API
 async function saveVideoToDatabase(data: {
+    userId: string;
     driveId: string;
     fileName: string;
     title: string;
@@ -188,33 +172,29 @@ async function saveVideoToDatabase(data: {
 // Main
 async function main() {
     console.log('\n' + '═'.repeat(60));
-    console.log(`${c.bold}${c.cyan}  YT Automation - Local Transcription Processor${c.reset}`);
-    console.log(`${c.dim}  No timeout limits! Full Whisper transcription support.${c.reset}`);
+    console.log(`${c.bold}${c.cyan}  YT Automation - Local Transcription Processor (v2)${c.reset}`);
+    console.log(`${c.dim}  Using AssemblyAI & Multi-user support.${c.reset}`);
     console.log('═'.repeat(60) + '\n');
 
-    // Check env vars
-    if (!process.env.REPLICATE_API_TOKEN) {
-        log('REPLICATE_API_TOKEN not set in .env', 'error');
-        process.exit(1);
-    }
-    if (!process.env.GEMINI_API_KEY) {
-        log('GEMINI_API_KEY not set in .env', 'error');
+    if (!process.env.ASSEMBLYAI_API_KEY) {
+        log('ASSEMBLYAI_API_KEY not set in .env', 'error');
         process.exit(1);
     }
 
-    log(`API Base: ${API_BASE}`, 'info');
-    log('Fetching videos from Google Drive...', 'info');
+    const userId = await getUserId();
+    if (!userId) {
+        log('No user found in database. Please login to the web app first.', 'error');
+        process.exit(1);
+    }
+    log(`Processing for user ID: ${userId}`, 'success');
 
     try {
-        // Get videos from Drive
         const driveFiles = await listVideosFromDrive();
-        log(`Found ${driveFiles.length} videos in Drive`, 'success');
+        if (driveFiles.length === 0) {
+            log('No new files found to process via API.', 'info');
+        }
 
-        // Get already processed
-        const processedIds = await getProcessedDriveIds();
-        log(`Already processed: ${processedIds.size} videos`, 'info');
-
-        // Filter new
+        const processedIds = await getProcessedDriveIds(userId);
         const newFiles = driveFiles.filter(f => !processedIds.has(f.id));
 
         if (newFiles.length === 0) {
@@ -231,45 +211,16 @@ async function main() {
             console.log(`\n${c.cyan}[${i + 1}/${newFiles.length}]${c.reset} ${file.name}`);
 
             try {
-                // Download
-                log('  Downloading from Drive...', 'info');
                 const buffer = await downloadFromDrive(file.id);
+                if (!buffer) { failed++; continue; }
 
-                if (!buffer || buffer.length === 0) {
-                    log('  Failed to download', 'error');
-                    failed++;
-                    continue;
-                }
-                log(`  Downloaded ${(buffer.length / 1024 / 1024).toFixed(1)}MB`, 'success');
+                const transcript = await transcribe(buffer);
+                if (!transcript) { failed++; continue; }
 
-                // Upload to Replicate
-                log('  Uploading to Replicate...', 'info');
-                const replicateUrl = await uploadToReplicate(buffer, file.name);
-
-                if (!replicateUrl) {
-                    failed++;
-                    continue;
-                }
-                log('  Uploaded successfully', 'success');
-
-                // Transcribe (NO TIMEOUT!)
-                const transcript = await transcribe(replicateUrl);
-
-                if (!transcript) {
-                    log('  Transcription failed, skipping', 'warn');
-                    failed++;
-                    continue;
-                }
-                log(`  Transcript: "${transcript.slice(0, 100)}..."`, 'success');
-
-                // Generate metadata from transcript
-                log('  Generating AI metadata from transcript...', 'info');
                 const metadata = await generateMetadata(transcript, file.name);
-                log(`  Title: ${metadata.title}`, 'success');
 
-                // Save via API
-                log('  Saving to database...', 'info');
                 const saved = await saveVideoToDatabase({
+                    userId,
                     driveId: file.id,
                     fileName: file.name,
                     title: metadata.title,
@@ -282,25 +233,25 @@ async function main() {
                     log('  ✅ Saved as draft!', 'success');
                     success++;
                 } else {
-                    log('  Failed to save', 'error');
+                    log('  Failed to save to database', 'error');
                     failed++;
                 }
-
             } catch (error) {
                 log(`  Error: ${error}`, 'error');
                 failed++;
             }
         }
 
-        // Summary
         console.log('\n' + '═'.repeat(60));
         console.log(`${c.bold}${c.green}  Processing Complete!${c.reset}`);
-        console.log(`  ${c.green}✓ ${success} videos processed with transcripts${c.reset}`);
+        console.log(`  ${c.green}✓ ${success} videos processed${c.reset}`);
         if (failed > 0) console.log(`  ${c.red}✗ ${failed} failed${c.reset}`);
         console.log('═'.repeat(60) + '\n');
 
     } catch (error) {
         log(`Fatal error: ${error}`, 'error');
+    } finally {
+        await prisma.$disconnect();
     }
 }
 

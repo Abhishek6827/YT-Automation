@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
 
-        const { driveId, fileName, title, description, tags, transcript } = body;
+        const { driveId, fileName, title, description, tags, transcript, userId } = body;
 
         if (!driveId || !fileName) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -26,6 +26,7 @@ export async function POST(req: Request) {
         // Create new video
         const video = await prisma.video.create({
             data: {
+                userId: userId, // Required for multi-user support
                 driveId,
                 fileName,
                 title: title || fileName,
