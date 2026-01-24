@@ -86,6 +86,7 @@ export async function POST(req: Request) {
 
     // Manual Run (User Session)
     const session = await auth();
+    console.log('[Automation POST] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -157,6 +158,7 @@ export async function POST(req: Request) {
 // GET /api/automation/status - Get automation status
 export async function GET() {
     const session = await auth();
+    console.log('[Automation GET] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
     if (!session?.user?.id || !session.accessToken) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

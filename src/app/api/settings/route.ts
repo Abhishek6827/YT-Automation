@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/settings - Get settings for the current user
 export async function GET() {
     const session = await auth();
+    console.log('[Settings GET] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -38,6 +39,7 @@ export async function GET() {
 // POST /api/settings - Update settings
 export async function POST(req: Request) {
     const session = await auth();
+    console.log('[Settings POST] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
