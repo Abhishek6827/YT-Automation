@@ -95,9 +95,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // Expose user id on the session for server APIs
             try {
                 const userIdFromToken = (token as any).userId as string | undefined;
+                // Fallback to sub which is standard in JWT
+                const sub = token.sub;
+
                 if (userIdFromToken) {
                     session.user = session.user || ({} as any);
                     (session.user as any).id = userIdFromToken;
+                } else if (sub) {
+                    session.user = session.user || ({} as any);
+                    (session.user as any).id = sub;
                 }
             } catch (e) {
                 // ignore
