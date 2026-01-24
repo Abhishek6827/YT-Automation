@@ -1472,7 +1472,7 @@ export default function Dashboard() {
                               key={video.id}
                               className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
-                              <div className="flex items-center gap-4 w-full sm:w-auto">
+                              <div className="flex items-center gap-4">
                               {/* Checkbox */}
                               <div
                                 className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
@@ -1527,7 +1527,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Info */}
-                              <div className="flex-1 min-w-0 w-full sm:w-auto">
+                              <div className="flex-1 min-w-0">
                                 <a
                                   href={`https://drive.google.com/file/d/${video.driveId}/view`}
                                   target="_blank"
@@ -1646,7 +1646,7 @@ export default function Dashboard() {
                               key={video.id}
                               className={`flex flex-col sm:flex-row sm:items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
-                              <div className="flex items-center gap-4 w-full sm:w-auto">
+                              <div className="flex items-center gap-4">
                               {/* Checkbox */}
                               <div
                                 className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
@@ -1674,7 +1674,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Info */}
-                              <div className="flex-1 min-w-0 space-y-1 w-full sm:w-auto">
+                              <div className="flex-1 min-w-0 space-y-1">
                                 <p className="font-medium text-zinc-200 truncate">
                                   {video.title || video.fileName}
                                 </p>
