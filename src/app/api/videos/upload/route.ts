@@ -76,6 +76,12 @@ export async function POST(req: Request) {
                     });
                     results.push({ id: video.id, status: 'failed', error: uploadResult.error });
                     failCount++;
+
+                    // If we hit a quota limit, stop trying to upload the rest
+                    if (uploadResult.isQuotaError) {
+                        console.warn('[Bulk Upload] Stopping batch due to Quota Error');
+                        break;
+                    }
                 }
 
             } catch (error) {

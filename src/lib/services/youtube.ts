@@ -24,6 +24,7 @@ export interface UploadResult {
     success: boolean;
     videoId?: string;
     error?: string;
+    isQuotaError?: boolean;
 }
 
 export interface CopyrightClaimInfo {
@@ -82,9 +83,15 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
             ? error.message
             : 'Unknown upload error';
 
+        // Check for specific upload limit/quota errors
+        const isQuotaError = errorMessage.includes('exceeded the number of videos') ||
+            errorMessage.includes('quotaExceeded') ||
+            errorMessage.includes('upload limit');
+
         return {
             success: false,
-            error: errorMessage,
+            error: isQuotaError ? 'Daily YouTube Upload Limit Reached. Please wait 24 hours.' : errorMessage,
+            isQuotaError
         };
     }
 }
