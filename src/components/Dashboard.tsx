@@ -1470,7 +1470,7 @@ export default function Dashboard() {
                           {published.map((video) => (
                             <div
                               key={video.id}
-                              className={`flex flex-col lg:flex-row lg:items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
+                              className={`grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
                               <div className="flex items-center gap-4">
                               {/* Checkbox */}
@@ -1556,7 +1556,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex items-center gap-1 opacity-100 lg:opacity-50 lg:group-hover:opacity-100 transition-opacity duration-200 self-end lg:self-auto">
+                              <div className="flex items-center gap-1 opacity-100 lg:opacity-50 lg:group-hover:opacity-100 transition-opacity duration-200 justify-end lg:justify-start">
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1644,7 +1644,7 @@ export default function Dashboard() {
                           {drafts.map((video) => (
                             <div
                               key={video.id}
-                              className={`flex flex-col lg:flex-row lg:items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
+                              className={`grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
                               <div className="flex items-center gap-4">
                               {/* Checkbox */}
@@ -1698,7 +1698,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex items-center gap-2 flex-shrink-0 self-end lg:self-auto">
+                              <div className="flex items-center gap-2 flex-shrink-0 justify-end lg:justify-start">
                                 <Button
                                   size="sm"
                                   variant="outline"
