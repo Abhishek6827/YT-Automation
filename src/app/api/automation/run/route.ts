@@ -87,7 +87,21 @@ export async function POST(req: Request) {
     // Manual Run (User Session)
     const session = await auth();
     console.log('[Automation POST] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    if (!session?.user?.id) {
+    // Resolve effective userId: prefer session.user.id but fall back to Account lookup using access token
+    let effectiveUserId: string | undefined = session?.user?.id;
+    if (!effectiveUserId && session?.accessToken) {
+        try {
+            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
+            if (account?.userId) {
+                effectiveUserId = account.userId;
+                console.log('[Automation POST] Resolved userId from Account via access_token:', effectiveUserId);
+            }
+        } catch (e) {
+            console.error('[Automation POST] Error looking up account by access token:', e);
+        }
+    }
+
+    if (!effectiveUserId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // For manual run, verify active token
@@ -159,7 +173,20 @@ export async function POST(req: Request) {
 export async function GET() {
     const session = await auth();
     console.log('[Automation GET] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    if (!session?.user?.id || !session.accessToken) {
+    let effectiveUserId: string | undefined = session?.user?.id;
+    if (!effectiveUserId && session?.accessToken) {
+        try {
+            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
+            if (account?.userId) {
+                effectiveUserId = account.userId;
+                console.log('[Automation GET] Resolved userId from Account via access_token:', effectiveUserId);
+            }
+        } catch (e) {
+            console.error('[Automation GET] Error looking up account by access token:', e);
+        }
+    }
+
+    if (!effectiveUserId || !session.accessToken) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

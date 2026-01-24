@@ -8,7 +8,19 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
     const session = await auth();
     console.log('[Settings GET] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    if (!session?.user?.id) {
+    let effectiveUserId: string | undefined = session?.user?.id;
+    if (!effectiveUserId && session?.accessToken) {
+        try {
+            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
+            if (account?.userId) {
+                effectiveUserId = account.userId;
+                console.log('[Settings GET] Resolved userId from Account via access_token:', effectiveUserId);
+            }
+        } catch (e) {
+            console.error('[Settings GET] Error looking up account by access token:', e);
+        }
+    }
+    if (!effectiveUserId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -40,7 +52,19 @@ export async function GET() {
 export async function POST(req: Request) {
     const session = await auth();
     console.log('[Settings POST] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    if (!session?.user?.id) {
+    let effectiveUserId: string | undefined = session?.user?.id;
+    if (!effectiveUserId && session?.accessToken) {
+        try {
+            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
+            if (account?.userId) {
+                effectiveUserId = account.userId;
+                console.log('[Settings POST] Resolved userId from Account via access_token:', effectiveUserId);
+            }
+        } catch (e) {
+            console.error('[Settings POST] Error looking up account by access token:', e);
+        }
+    }
+    if (!effectiveUserId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,14 +88,14 @@ export async function POST(req: Request) {
             : null;
 
         const settings = await prisma.settings.upsert({
-            where: { userId: session.user.id },
+            where: { userId: effectiveUserId },
             update: {
                 driveFolderLink: safeDriveFolderLink,
                 uploadHour: safeUploadHour,
                 videosPerDay: safeVideosPerDay,
             },
             create: {
-                userId: session.user.id,
+                userId: effectiveUserId,
                 driveFolderLink: safeDriveFolderLink,
                 uploadHour: safeUploadHour,
                 videosPerDay: safeVideosPerDay,
