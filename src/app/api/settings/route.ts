@@ -44,20 +44,35 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { driveFolderLink, uploadHour, videosPerDay } = body;
+        const { driveFolderLink, uploadHour, videosPerDay } = body || {};
+
+        // Helper to parse integers safely and fallback to defaults
+        const parseIntSafe = (val: any, fallback: number) => {
+            if (val === undefined || val === null) return fallback;
+            const n = parseInt(String(val), 10);
+            return Number.isNaN(n) ? fallback : n;
+        };
+
+        const safeUploadHour = parseIntSafe(uploadHour, 10);
+        const safeVideosPerDay = parseIntSafe(videosPerDay, 1);
+
+        // Normalize driveFolderLink: treat empty strings as null
+        const safeDriveFolderLink = typeof driveFolderLink === 'string' && driveFolderLink.trim() !== ''
+            ? driveFolderLink.trim()
+            : null;
 
         const settings = await prisma.settings.upsert({
             where: { userId: session.user.id },
             update: {
-                driveFolderLink,
-                uploadHour: parseInt(uploadHour),
-                videosPerDay: parseInt(videosPerDay),
+                driveFolderLink: safeDriveFolderLink,
+                uploadHour: safeUploadHour,
+                videosPerDay: safeVideosPerDay,
             },
             create: {
                 userId: session.user.id,
-                driveFolderLink,
-                uploadHour: parseInt(uploadHour),
-                videosPerDay: parseInt(videosPerDay),
+                driveFolderLink: safeDriveFolderLink,
+                uploadHour: safeUploadHour,
+                videosPerDay: safeVideosPerDay,
             },
         });
 
