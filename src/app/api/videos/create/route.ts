@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/videos/create - Create a new video record (used by local processor)
 export async function POST(req: Request) {
     try {
+        const session = await auth();
         const body = await req.json();
 
-        const { driveId, fileName, title, description, tags, transcript } = body;
+        const { driveId, fileName, title, description, tags, transcript, userId } = body;
+
+        // Use userId from session or body (session takes precedence if available and valid)
+        // If local processor uses it, it might pass userId in body without session
+        const effectiveUserId = session?.user?.id || userId;
+
+        if (!effectiveUserId) {
+            return NextResponse.json({ error: 'Unauthorized: User ID required' }, { status: 401 });
+        }
 
         if (!driveId || !fileName) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -26,6 +36,7 @@ export async function POST(req: Request) {
         // Create new video
         const video = await prisma.video.create({
             data: {
+                userId: effectiveUserId,
                 driveId,
                 fileName,
                 title: title || fileName,
