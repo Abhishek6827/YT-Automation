@@ -1470,8 +1470,9 @@ export default function Dashboard() {
                           {published.map((video) => (
                             <div
                               key={video.id}
-                              className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
+                              className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
+                              <div className="flex items-center gap-4 w-full sm:w-auto">
                               {/* Checkbox */}
                               <div
                                 className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
@@ -1523,9 +1524,10 @@ export default function Dashboard() {
                                   </div>
                                 )}
                               </div>
+                              </div>
 
                               {/* Info */}
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 w-full sm:w-auto">
                                 <a
                                   href={`https://drive.google.com/file/d/${video.driveId}/view`}
                                   target="_blank"
@@ -1554,7 +1556,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity duration-200">
+                              <div className="flex items-center gap-1 opacity-100 sm:opacity-50 sm:group-hover:opacity-100 transition-opacity duration-200 self-end sm:self-auto">
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1642,8 +1644,9 @@ export default function Dashboard() {
                           {drafts.map((video) => (
                             <div
                               key={video.id}
-                              className={`flex items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
+                              className={`flex flex-col sm:flex-row sm:items-start gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
                             >
+                              <div className="flex items-center gap-4 w-full sm:w-auto">
                               {/* Checkbox */}
                               <div
                                 className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
@@ -1668,9 +1671,10 @@ export default function Dashboard() {
                               >
                                 <PlayIcon />
                               </button>
+                              </div>
 
                               {/* Info */}
-                              <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex-1 min-w-0 space-y-1 w-full sm:w-auto">
                                 <p className="font-medium text-zinc-200 truncate">
                                   {video.title || video.fileName}
                                 </p>
@@ -1694,7 +1698,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex items-center gap-2 flex-shrink-0">
+                              <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
                                 <Button
                                   size="sm"
                                   variant="outline"
