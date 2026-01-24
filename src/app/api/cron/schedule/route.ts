@@ -25,8 +25,11 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Get settings
-        const settings = await prisma.settings.findFirst();
+        // Get settings for this user
+        const settings = await prisma.settings.findUnique({
+            where: { userId: session.user?.id }
+        });
+
         if (!settings?.driveFolderLink) {
             return NextResponse.json(
                 { error: 'No Drive folder configured' },
@@ -52,6 +55,7 @@ export async function GET(request: NextRequest) {
 
         // Run automation with daily limit
         const result = await runAutomation(
+            session.user?.id as string,
             session.accessToken,
             settings.driveFolderLink,
             settings.videosPerDay,
