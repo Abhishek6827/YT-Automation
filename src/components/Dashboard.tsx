@@ -848,14 +848,7 @@ export default function Dashboard() {
                     </Button>
                 </div>
 
-                <div className="pt-2 border-t border-zinc-800">
-                    <Button 
-                        onClick={() => setIsScheduleOpen(true)}
-                        className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
-                    >
-                        📅 Schedule Output for Later
-                    </Button>
-                </div>
+
 
                 <div className="pt-2 space-y-3">
                   <Button 
