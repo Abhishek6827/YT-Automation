@@ -66,21 +66,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
     callbacks: {
-        async jwt({ token, account }) {
-            // Initial sign in - store tokens
-            if (account) {
-                console.log('Initial login - storing tokens');
+        async jwt({ token, account, user }) {
+            // Initial sign in - store tokens and user id
+            if (account && user) {
+                console.log('Initial login - storing tokens and user id');
                 return {
                     ...token,
                     accessToken: account.access_token,
                     refreshToken: account.refresh_token,
                     expiresAt: account.expires_at,
+                    userId: (user as any).id,
                 };
             }
 
             // Return token if not expired (with 5 minute buffer)
-            const expiresAt = token.expiresAt as number;
-            if (Date.now() < (expiresAt - 300) * 1000) {
+            const expiresAt = token.expiresAt as number | undefined;
+            if (expiresAt && Date.now() < (expiresAt - 300) * 1000) {
                 return token;
             }
 
@@ -91,6 +92,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async session({ session, token }) {
             // Send accessToken to the client
             session.accessToken = token.accessToken as string;
+            // Expose user id on the session for server APIs
+            try {
+                const userIdFromToken = (token as any).userId as string | undefined;
+                if (userIdFromToken) {
+                    session.user = session.user || ({} as any);
+                    (session.user as any).id = userIdFromToken;
+                }
+            } catch (e) {
+                // ignore
+            }
             // Optionally expose error to client for handling
             if (token.error) {
                 session.error = token.error as string;
