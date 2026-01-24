@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
         }
 
         const session = await auth();
-        if (!session?.accessToken || !session?.user?.id) {
+        if (!session?.accessToken) {
             return NextResponse.json(
-                { error: 'No active session or user ID - user needs to be logged in' },
+                { error: 'No active session - user needs to be logged in' },
                 { status: 401 }
             );
         }
@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
 
         // Run automation with daily limit
         const result = await runAutomation(
-            session.user.id,
             session.accessToken,
             settings.driveFolderLink,
             settings.videosPerDay,

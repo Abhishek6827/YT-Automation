@@ -91,12 +91,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async session({ session, token }) {
             // Send accessToken to the client
             session.accessToken = token.accessToken as string;
-
-            // Ensure user ID is passed to session
-            if (session.user && token.sub) {
-                session.user.id = token.sub;
-            }
-
             // Optionally expose error to client for handling
             if (token.error) {
                 session.error = token.error as string;

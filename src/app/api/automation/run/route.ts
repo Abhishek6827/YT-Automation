@@ -112,17 +112,15 @@ export async function POST(req: Request) {
         let draftOnly = false;
         let limit = 1;
         let scheduleTime: Date | undefined;
-        let bodyLink: string | undefined;
 
         try {
             const body = await req.json();
             draftOnly = body?.draftOnly === true;
-            bodyLink = body?.driveFolderLink;
 
             if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
                 limit = body.limit;
             } else {
-                limit = settings?.videosPerDay || 1;
+                limit = settings.videosPerDay || 1;
             }
 
             // Parse scheduleTime if present
@@ -133,13 +131,7 @@ export async function POST(req: Request) {
                 }
             }
         } catch (parseError) {
-            limit = settings?.videosPerDay || 1;
-        }
-
-        const effectiveLink = bodyLink || settings?.driveFolderLink;
-
-        if (!effectiveLink) {
-            return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
+            limit = settings.videosPerDay || 1;
         }
 
         console.log(`[Automation] Manual Run - User: ${session.user.id}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
@@ -148,9 +140,9 @@ export async function POST(req: Request) {
         const result = await runAutomation(
             session.user.id,
             accessToken,
-            effectiveLink,
+            settings.driveFolderLink,
             limit,
-            settings?.uploadHour || 10,
+            settings.uploadHour,
             draftOnly,
             scheduleTime
         );

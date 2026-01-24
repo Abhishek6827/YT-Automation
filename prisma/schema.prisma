@@ -62,7 +62,7 @@ model CopyrightLog {
 }
 
 model Settings {
-  id              Int      @id @default(autoincrement())
+  id              Int      @id @default(1)
   userId          String   @unique // One settings per user
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   driveFolderLink String?
