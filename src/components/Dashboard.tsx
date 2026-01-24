@@ -618,6 +618,38 @@ export default function Dashboard() {
     }
   };
 
+
+
+  const handleBulkUpload = async () => {
+    if (selectedVideos.size === 0) return;
+    setIsBulkUploading(true);
+
+    try {
+      const videoIds = Array.from(selectedVideos);
+      const res = await apiFetch("/api/videos/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoIds }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(
+          `Upload complete! Success: ${data.successCount}, Failed: ${data.failCount}`,
+        );
+        fetchVideos();
+        setSelectedVideos(new Set()); // Clear selection
+      } else {
+        alert("Upload failed: " + (data.error || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error during bulk upload");
+    }
+    setIsBulkUploading(false);
+  };
+
   const openDrivePreview = async () => {
     setDrivePreviewOpen(true);
     setIsPreviewLoading(true);
@@ -1401,14 +1433,29 @@ export default function Dashboard() {
                           </span>
                         </div>
                         {selectedVideos.size > 0 && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
-                          >
-                            Delete Selected ({selectedVideos.size})
-                          </Button>
+                          <div className="flex gap-2">
+                             <Button
+                              size="sm"
+                              onClick={handleBulkUpload}
+                              disabled={isBulkUploading}
+                              className="h-7 text-xs bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-900/30 transition-all duration-300 hover:scale-105"
+                            >
+                              {isBulkUploading ? (
+                                <RefreshIcon spinning />
+                              ) : (
+                                <span className="mr-1">☁️</span>
+                              )}
+                              Upload ({selectedVideos.size})
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setShowBulkDeleteConfirm(true)}
+                              className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
+                            >
+                              Delete ({selectedVideos.size})
+                            </Button>
+                          </div>
                         )}
                       </div>
 
@@ -1555,14 +1602,29 @@ export default function Dashboard() {
                           </span>
                         </div>
                         {selectedVideos.size > 0 && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setShowBulkDeleteConfirm(true)}
-                            className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
-                          >
-                            Delete Selected ({selectedVideos.size})
-                          </Button>
+                          <div className="flex gap-2">
+                             <Button
+                              size="sm"
+                              onClick={handleBulkUpload}
+                              disabled={isBulkUploading}
+                              className="h-7 text-xs bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-900/30 transition-all duration-300 hover:scale-105"
+                            >
+                              {isBulkUploading ? (
+                                <RefreshIcon spinning />
+                              ) : (
+                                <span className="mr-1">☁️</span>
+                              )}
+                              Upload ({selectedVideos.size})
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setShowBulkDeleteConfirm(true)}
+                              className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
+                            >
+                              Delete ({selectedVideos.size})
+                            </Button>
+                          </div>
                         )}
                       </div>
 
