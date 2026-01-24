@@ -390,6 +390,7 @@ export default function Dashboard() {
   >([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
 
   // Copyright Status State
   const [copyrightStatus, setCopyrightStatus] =
