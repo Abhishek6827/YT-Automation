@@ -51,10 +51,11 @@ CRITICAL RULES:
 2. Each generation must be COMPLETELY DIFFERENT - use the seed for randomness
 3. Match the ${randomStyle} style for this video
 4. Title max 100 chars, but keep it punchy (40-60 chars ideal)
+5. ALWAYS append exactly 3 relevant hashtags to the title (e.g. "Title text #tag1 #tag2 #tag3")
 
 Generate JSON:
 {
-  "title": "Unique viral title using ${randomStyle} style with emojis",
+  "title": "Unique viral title using ${randomStyle} style with emojis #tag1 #tag2 #tag3",
   "description": "Engaging description (max 200 chars). Hook the viewer. End with: Subscribe for more amazing content! Then add 5 relevant hashtags.",
   "tags": ["15-20 unique tags relevant to shorts content, each tag max 30 chars"]
 }
@@ -171,10 +172,11 @@ Based on the transcript above, create YouTube metadata that:
 1. Captures the MAIN TOPIC or HOOK from the spoken content
 2. Creates curiosity without giving everything away
 3. Uses emotional triggers matching the content tone
+4. ALWAYS appends exactly 3 relevant hashtags to the title
 
 Generate JSON:
 {
-  "title": "Catchy title based on transcript content (max 60 chars, use emojis)",
+  "title": "Catchy title based on transcript content (max 60 chars, use emojis) #tag1 #tag2 #tag3",
   "description": "Hook sentence summarizing video content. What viewers will learn/see. Call to action. Then 5 relevant hashtags.",
   "tags": ["15-20 specific tags based on transcript topics, each max 30 chars"]
 }
