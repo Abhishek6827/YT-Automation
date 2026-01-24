@@ -73,8 +73,18 @@ async function getNextScheduleTime(userId: string, uploadHour: number, videosPer
         }
     }
 
-    // Ensure strict hour setting
-    baseDate.setHours(uploadHour, 0, 0, 0);
+    // Fix: Interpret uploadHour as IST (Indian Standard Time)
+    // Server runs in UTC. YouTube expects UTC timestamp.
+    // If user wants 21:00 IST, that is 15:30 UTC.
+    // Logic: Set time to uploadHour (e.g., 21:00) in UTC, then subtract 5.5 hours.
+
+    // 1. Set hours to the target hour in UTC (e.g. 21:00 UTC)
+    baseDate.setUTCHours(uploadHour, 0, 0, 0);
+
+    // 2. Subtract 5 hours and 30 minutes to convert "21:00 IST" to "15:30 UTC"
+    // 5.5 hours = 5 * 60 * 60 * 1000 + 30 * 60 * 1000 = 19800000 ms
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    baseDate = new Date(baseDate.getTime() - IST_OFFSET_MS);
 
     return baseDate;
 }
