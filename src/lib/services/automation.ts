@@ -275,8 +275,8 @@ export async function runAutomation(
                     // SAFETY CHECK: Verify video has no restrictions
                     // Only run this if we intended to schedule it (not immediate public)
                     try {
-                        console.log(`[Automation] Video ${uploadResult.videoId} uploaded. Waiting 5s for safety check...`);
-                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        console.log(`[Automation] Video ${uploadResult.videoId} uploaded. Waiting 15s for safety check...`);
+                        await new Promise(resolve => setTimeout(resolve, 15000));
 
                         const safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
                         console.log(`[Automation] Safety check result for ${uploadResult.videoId}:`, JSON.stringify(safetyCheck, null, 2));

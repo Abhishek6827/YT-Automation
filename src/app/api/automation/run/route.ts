@@ -162,20 +162,27 @@ export async function POST(req: Request) {
         // If a new link is provided, save it to settings for future convenience
         if (providedDriveLink && providedDriveLink !== settings?.driveFolderLink) {
             try {
-                await prisma.settings.upsert({
-                    where: { userId },
-                    update: { driveFolderLink: providedDriveLink },
-                    create: {
-                        userId,
-                        driveFolderLink: providedDriveLink,
-                        uploadHour: settings?.uploadHour || 10,
-                        videosPerDay: settings?.videosPerDay || 1,
-                    },
-                });
+                // Use explicit update/create to avoid potential P2002 race conditions with upsert on some Prisma versions/drivers
+                const existingSettings = await prisma.settings.findUnique({ where: { userId } });
+                if (existingSettings) {
+                    await prisma.settings.update({
+                        where: { userId },
+                        data: { driveFolderLink: providedDriveLink }
+                    });
+                } else {
+                    await prisma.settings.create({
+                        data: {
+                            userId,
+                            driveFolderLink: providedDriveLink,
+                            uploadHour: 10,
+                            videosPerDay: 1
+                        }
+                    });
+                }
                 console.log(`[Automation] Updated drive link for user ${userId}`);
             } catch (dbError) {
-                console.error('[Automation] Failed to save new drive link:', dbError);
-                // Continue execution even if save fails
+                console.warn('[Automation] Note: Failed to save new drive link preference (non-critical):', dbError instanceof Error ? dbError.message : 'Unknown DB error');
+                // Continue execution
             }
         }
 
