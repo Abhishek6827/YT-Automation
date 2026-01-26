@@ -481,6 +481,7 @@ export default function Dashboard() {
   const runAutomation = async (
     draftOnly: boolean = false,
     customScheduleTime?: Date,
+    immediate: boolean = false
   ) => {
     setIsRunning(true);
     setLastResult(null);
@@ -493,7 +494,8 @@ export default function Dashboard() {
       const payload: any = { 
         draftOnly, 
         limit: settings.videosPerDay,
-        driveFolderLink: settings.driveFolderLink // Pass the link explicitly
+        driveFolderLink: settings.driveFolderLink, // Pass the link explicitly
+        immediate
       };
       if (customScheduleTime) {
         payload.scheduleTime = customScheduleTime.toISOString();
@@ -1225,9 +1227,9 @@ export default function Dashboard() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                    <div className="space-y-2">
                     <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                      Upload Time
+                      Default Daily Schedule Time (UTC)
                     </Label>
                     <Select
                       value={String(settings.uploadHour)}
@@ -1283,13 +1285,13 @@ export default function Dashboard() {
                   </Button>
 
                   <Button
-                    onClick={() => runAutomation(false)}
+                    onClick={() => runAutomation(false, undefined, true)}
                     disabled={isRunning || !settings.driveFolderLink}
                     variant="secondary"
                     className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium border border-zinc-700/50 transition-all duration-300"
                   >
                     <PlayIcon />
-                    <span className="ml-2">Upload Immediately</span>
+                    <span className="ml-2">Upload Immediately (Public)</span>
                   </Button>
 
                   <Button
@@ -1450,7 +1452,7 @@ export default function Dashboard() {
                               ) : (
                                 <span className="mr-1">☁️</span>
                               )}
-                              Upload ({selectedVideos.size})
+                              Schedule/Upload ({selectedVideos.size})
                             </Button>
                             <Button
                               size="sm"

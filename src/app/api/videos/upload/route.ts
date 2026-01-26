@@ -48,14 +48,20 @@ export async function POST(req: Request) {
 
                 // Upload to YouTube
                 // Use stored metadata or fallback to filename if empty (should have metadata by now)
+
+                // Determine privacy and scheduling
+                const isScheduled = video.scheduledFor && new Date(video.scheduledFor) > new Date();
+                const privacyStatus = isScheduled ? 'private' : 'public';
+                const publishAt = isScheduled && video.scheduledFor ? new Date(video.scheduledFor).toISOString() : undefined;
+
                 const uploadResult = await uploadVideo({
                     accessToken,
                     videoStream,
                     title: video.title || video.fileName,
                     description: video.description || '',
                     tags: video.tags ? video.tags.split(',') : [],
-                    privacyStatus: 'private', // Default to private for review
-                    // No publishAt here, simplified immediate upload
+                    privacyStatus: privacyStatus,
+                    publishAt: publishAt,
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {

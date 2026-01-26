@@ -127,11 +127,13 @@ export async function POST(req: Request) {
         let limit = 1;
         let scheduleTime: Date | undefined;
         let providedDriveLink: string | undefined;
+        let immediate = false;
 
         try {
             const body = await req.json();
             draftOnly = body?.draftOnly === true;
             providedDriveLink = body?.driveFolderLink;
+            immediate = body?.immediate === true;
 
             if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
                 limit = body.limit;
@@ -177,7 +179,7 @@ export async function POST(req: Request) {
             }
         }
 
-        console.log(`[Automation] Manual Run - User: ${userId}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
+        console.log(`[Automation] Manual Run - User: ${userId}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}, Immediate: ${immediate}`);
 
         // Run automation
         const result = await runAutomation(
@@ -187,7 +189,8 @@ export async function POST(req: Request) {
             limit,
             settings?.uploadHour || 10,
             draftOnly,
-            scheduleTime
+            scheduleTime,
+            immediate
         );
 
         return NextResponse.json(result);

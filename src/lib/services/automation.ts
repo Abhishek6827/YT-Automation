@@ -75,16 +75,11 @@ async function getNextScheduleTime(userId: string, uploadHour: number, videosPer
 
     // Fix: Interpret uploadHour as IST (Indian Standard Time)
     // Server runs in UTC. YouTube expects UTC timestamp.
-    // If user wants 21:00 IST, that is 15:30 UTC.
-    // Logic: Set time to uploadHour (e.g., 21:00) in UTC, then subtract 5.5 hours.
-
-    // 1. Set hours to the target hour in UTC (e.g. 21:00 UTC)
+    // Logic: Treat uploadHour as the user's desired hour in UTC.
+    // If user wants 21:00, we schedule for 21:00 UTC. 
+    // This assumes the user input is already adjusted or they are fine with UTC.
+    // The previous logic complicating IST/UTC conversion was causing issues.
     baseDate.setUTCHours(uploadHour, 0, 0, 0);
-
-    // 2. Subtract 5 hours and 30 minutes to convert "21:00 IST" to "15:30 UTC"
-    // 5.5 hours = 5 * 60 * 60 * 1000 + 30 * 60 * 1000 = 19800000 ms
-    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-    baseDate = new Date(baseDate.getTime() - IST_OFFSET_MS);
 
     return baseDate;
 }
@@ -96,7 +91,8 @@ export async function runAutomation(
     limit: number = 1,
     uploadHour: number = 10,
     draftOnly: boolean = false,
-    customScheduleTime?: Date // New: Allow passing specific schedule time
+    customScheduleTime?: Date, // New: Allow passing specific schedule time
+    immediate: boolean = false // New: Skip scheduling entirely
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -170,7 +166,8 @@ export async function runAutomation(
 
             // Calculate Schedule Time
             // If customScheduleTime was passed, use it. Otherwise calculate based on user's schedule.
-            const scheduleTime = customScheduleTime || await getNextScheduleTime(userId, uploadHour, limit);
+            // If immediate is true, scheduleTime is null.
+            const scheduleTime: Date | null = immediate ? null : (customScheduleTime || await getNextScheduleTime(userId, uploadHour, limit));
 
             try {
                 // Generate metadata using AI - try AssemblyAI transcription first
@@ -260,8 +257,8 @@ export async function runAutomation(
                     title: metadata.title,
                     description: metadata.description,
                     tags: metadata.tags,
-                    privacyStatus: 'private',
-                    publishAt: scheduleTime.toISOString(),
+                    privacyStatus: immediate ? 'public' : 'private',
+                    publishAt: scheduleTime ? scheduleTime.toISOString() : undefined,
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {
