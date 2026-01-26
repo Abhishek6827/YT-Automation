@@ -39,6 +39,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Settings as CogIcon, ChevronDown as ChevronDownIcon } from "lucide-react";
 
 // Helper to ensure requests include cookies (NextAuth session)
 const apiFetch = (input: RequestInfo, init?: RequestInit) => {
@@ -1202,55 +1208,67 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                      Daily Limit
-                    </Label>
-                    <Select
-                      value={String(settings.videosPerDay)}
-                      onValueChange={(v) =>
-                        setSettings({ ...settings, videosPerDay: parseInt(v) })
-                      }
-                    >
-                      <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                        {[1, 3, 5, 10, 20, 50, 100, 500, 1000, 10000].map(
-                          (n) => (
-                            <SelectItem key={n} value={String(n)}>
-                              {n} video{n > 1 ? "s" : ""}/day
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                    <div className="space-y-2">
-                    <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                      Default Daily Schedule Time (UTC)
-                    </Label>
-                    <Select
-                      value={String(settings.uploadHour)}
-                      onValueChange={(v) =>
-                        setSettings({ ...settings, uploadHour: parseInt(v) })
-                      }
-                    >
-                      <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                        {Array.from({ length: 24 }, (_, i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            {i.toString().padStart(2, "0")}:00{" "}
-                            {i < 12 ? "AM" : "PM"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <Collapsible>
+                   <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full justify-between text-zinc-400 hover:text-zinc-300 p-0 h-auto mb-2">
+                      <span className="text-xs uppercase tracking-wider flex items-center gap-1">
+                        <CogIcon className="w-3 h-3" /> Default Settings
+                      </span>
+                      <ChevronDownIcon className="w-3 h-3" />
+                    </Button>
+                   </CollapsibleTrigger>
+                   <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-zinc-500 text-[10px] uppercase tracking-wider">
+                          Daily Limit
+                        </Label>
+                        <Select
+                          value={String(settings.videosPerDay)}
+                          onValueChange={(v) =>
+                            setSettings({ ...settings, videosPerDay: parseInt(v) })
+                          }
+                        >
+                          <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50 h-8 text-xs">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
+                            {[1, 3, 5, 10, 20, 50, 100, 500, 1000, 10000].map(
+                              (n) => (
+                                <SelectItem key={n} value={String(n)} className="text-xs">
+                                  {n} video{n > 1 ? "s" : ""}/day
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-zinc-500 text-[10px] uppercase tracking-wider">
+                           Daily Schedule (UTC)
+                        </Label>
+                        <Select
+                          value={String(settings.uploadHour)}
+                          onValueChange={(v) =>
+                            setSettings({ ...settings, uploadHour: parseInt(v) })
+                          }
+                        >
+                          <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50 h-8 text-xs">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <SelectItem key={i} value={String(i)} className="text-xs">
+                                {i.toString().padStart(2, "0")}:00{" "}
+                                {i < 12 ? "AM" : "PM"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
 
 
@@ -1278,7 +1296,7 @@ export default function Dashboard() {
                       <>
                         <SparklesIcon />
                         <span className="ml-2">
-                          Fetch & Create Draft
+                          Sync & Create Drafts
                         </span>
                       </>
                     )}
@@ -1291,7 +1309,7 @@ export default function Dashboard() {
                     className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium border border-zinc-700/50 transition-all duration-300"
                   >
                     <PlayIcon />
-                    <span className="ml-2">Upload Immediately (Public)</span>
+                    <span className="ml-2">Sync & Upload (Public)</span>
                   </Button>
 
                   <Button
@@ -1450,9 +1468,9 @@ export default function Dashboard() {
                               {isBulkUploading ? (
                                 <RefreshIcon spinning />
                               ) : (
-                                <span className="mr-1">☁️</span>
+                                <span className="mr-1">🚀</span>
                               )}
-                              Schedule/Upload ({selectedVideos.size})
+                              Publish Selected ({selectedVideos.size})
                             </Button>
                             <Button
                               size="sm"
