@@ -142,8 +142,14 @@ export async function runAutomation(
         }
 
         // Get already processed file IDs from database for this user
+        // Fix: Only exclude successfully processed or pending videos. Allow retrying FAILED ones.
         const existingVideos = await prisma.video.findMany({
-            where: { userId },
+            where: {
+                userId,
+                status: {
+                    in: ['UPLOADED', 'PROCESSING', 'PENDING', 'DRAFT']
+                }
+            },
             select: { driveId: true },
         });
         const processedIds = new Set(existingVideos.map((v: { driveId: string }) => v.driveId));
@@ -152,7 +158,7 @@ export async function runAutomation(
         const newFiles = driveFiles.filter((f: { id: string }) => !processedIds.has(f.id));
 
         if (newFiles.length === 0) {
-            result.errors.push('All videos have already been processed');
+            result.errors.push('No new videos found (checked against Uploaded/Drafts/Pending)');
             return result;
         }
 

@@ -1639,9 +1639,9 @@ export default function Dashboard() {
                               {isBulkUploading ? (
                                 <RefreshIcon spinning />
                               ) : (
-                                <span className="mr-1">☁️</span>
+                                <span className="mr-1">🚀</span>
                               )}
-                              Upload ({selectedVideos.size})
+                              Publish Selected ({selectedVideos.size})
                             </Button>
                             <Button
                               size="sm"
