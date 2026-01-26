@@ -3,9 +3,7 @@ import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { downloadFile } from '@/lib/services/drive';
-import { uploadVideo } from '@/lib/services/youtube';
-
-// Import logic from automation service
+import { uploadVideo, getVideoStatus, updateVideoVisibility } from '@/lib/services/youtube';
 import { getNextScheduleTime } from '@/lib/services/automation';
 
 export const dynamic = 'force-dynamic';
@@ -92,17 +90,50 @@ export async function POST(req: Request) {
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {
+
+                    // SAFETY CHECK: Verify video has no restrictions
+                    // Restrictions like "Shorts policy" or copyright claims should prevent auto-scheduling
+                    let finalStatus = 'UPLOADED';
+                    let safetyError: string | undefined;
+
+                    try {
+                        // Check status immediately
+                        const safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
+
+                        if (safetyCheck.success && safetyCheck.hasRestrictions) {
+                            console.warn(`[Upload] Video ${video.id} has restrictions. Reverting to PRIVATE (Unscheduled).`);
+
+                            // Revert to Private (Unscheduled) by clearing publishAt (schedule)
+                            await updateVideoVisibility(accessToken, uploadResult.videoId, 'private');
+
+                            finalStatus = 'RESTRICTED';
+                            safetyError = 'Restricted (Copyright/Policy)';
+
+                            // Clear schedule variable so it's recorded as null
+                            scheduleTime = null;
+                        }
+                    } catch (err) {
+                        console.error('Safety check failed', err);
+                    }
+
                     await prisma.video.update({
                         where: { id: video.id },
                         data: {
-                            status: 'UPLOADED',
+                            status: finalStatus,
                             youtubeId: uploadResult.videoId,
                             uploadedAt: new Date(),
-                            // Ensure schedule is persisted if it wasn't already
-                            scheduledFor: scheduleTime
+                            // Ensure schedule is persisted if it wasn't already, OR cleared if restricted
+                            scheduledFor: finalStatus === 'RESTRICTED' ? null : scheduleTime
                         }
                     });
-                    results.push({ id: video.id, status: 'success', videoId: uploadResult.videoId, scheduledFor: scheduleTime });
+
+                    results.push({
+                        id: video.id,
+                        status: safetyError ? 'restricted' : 'success',
+                        videoId: uploadResult.videoId,
+                        scheduledFor: finalStatus === 'RESTRICTED' ? null : scheduleTime,
+                        error: safetyError
+                    });
                     successCount++;
                 } else {
                     await prisma.video.update({

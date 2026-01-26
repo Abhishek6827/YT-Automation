@@ -174,7 +174,7 @@ export async function updateVideoMetadata(
 export async function getVideoStatus(
     accessToken: string,
     videoId: string
-): Promise<{ success: boolean; status?: string; copyrightInfo?: CopyrightClaimInfo; error?: string }> {
+): Promise<{ success: boolean; status?: string; copyrightInfo?: CopyrightClaimInfo; hasRestrictions?: boolean; error?: string }> {
     try {
         const youtube = createYouTubeClient(accessToken);
 
@@ -218,10 +218,13 @@ export async function getVideoStatus(
             console.log(`[YouTube] Video ${videoId} has content rating:`, contentRating);
         }
 
+        const regionRestriction = video.contentDetails?.regionRestriction;
+
         return {
             success: true,
             status: `${uploadStatus}/${privacyStatus}`,
             copyrightInfo,
+            hasRestrictions: copyrightInfo.hasClaims || !!regionRestriction, // Flag if any restriction exists
         };
     } catch (error) {
         console.error('YouTube status check error:', error);
@@ -253,6 +256,7 @@ export async function updateVideoVisibility(
         }
 
         // Update with new visibility
+        // Update with new visibility
         await youtube.videos.update({
             part: ['status'],
             requestBody: {
@@ -260,6 +264,13 @@ export async function updateVideoVisibility(
                 status: {
                     privacyStatus: visibility,
                     selfDeclaredMadeForKids: video.status?.selfDeclaredMadeForKids || false,
+                    // If we are setting to private, user might want to clear publishAt to 'unschedule' it.
+                    // However, we need to explicitly pass null to clear it if the API supports it, 
+                    // or just setting privacyStatus='private' might be enough if not 'scheduled'?
+                    // To be safe, if we are forcing private, we try to clear publishAt by not sending it? 
+                    // Actually, to nullify, we might need to send null. 
+                    // TS issue: publishAt expects string | null | undefined.
+                    publishAt: visibility === 'private' ? null : undefined
                 },
             },
         });
