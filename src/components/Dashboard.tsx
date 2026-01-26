@@ -1303,6 +1303,16 @@ export default function Dashboard() {
                   </Button>
 
                   <Button
+                    onClick={() => runAutomation(false, undefined, false)}
+                    disabled={isRunning || !settings.driveFolderLink}
+                    variant="default"
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-lg shadow-indigo-900/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                     <span className="mr-2">🗓️</span>
+                     <span className="">Sync & Auto-Schedule</span>
+                  </Button>
+
+                  <Button
                     onClick={() => runAutomation(false, undefined, true)}
                     disabled={isRunning || !settings.driveFolderLink}
                     variant="secondary"
