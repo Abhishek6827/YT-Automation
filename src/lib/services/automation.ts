@@ -19,7 +19,7 @@ export interface AutomationResult {
 
 // Main automation function - scans Drive, generates metadata, uploads to YouTube
 // Helper to getting next schedule time
-async function getNextScheduleTime(userId: string, uploadHour: number, videosPerDay: number): Promise<Date> {
+export async function getNextScheduleTime(userId: string, uploadHour: number, videosPerDay: number): Promise<Date> {
     // Get the last scheduled video for this user
     const lastScheduled = await prisma.video.findFirst({
         where: {

@@ -5,6 +5,9 @@ import { prisma } from '@/lib/db';
 import { downloadFile } from '@/lib/services/drive';
 import { uploadVideo } from '@/lib/services/youtube';
 
+// Import logic from automation service
+import { getNextScheduleTime } from '@/lib/services/automation';
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -37,6 +40,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'No eligible videos found to upload' }, { status: 404 });
         }
 
+        // Get user settings for scheduling
+        const settings = await prisma.settings.findUnique({
+            where: { userId }
+        });
+        const uploadHour = settings?.uploadHour || 10;
+        const videosPerDay = settings?.videosPerDay || 1;
+
         const results = [];
         let successCount = 0;
         let failCount = 0;
@@ -46,13 +56,30 @@ export async function POST(req: Request) {
                 // Download from Drive
                 const videoStream = await downloadFile(accessToken, video.driveId);
 
-                // Upload to YouTube
-                // Use stored metadata or fallback to filename if empty (should have metadata by now)
+                // Determining Schedule:
+                // If the video already has a schedule (that is in the future), keep it.
+                // If it has NO schedule (or it's in the past/null), calculate a new one based on Settings.
+                let scheduleTime = video.scheduledFor;
+                let isScheduled = scheduleTime && new Date(scheduleTime) > new Date();
 
-                // Determine privacy and scheduling
-                const isScheduled = video.scheduledFor && new Date(video.scheduledFor) > new Date();
+                if (!isScheduled) {
+                    // Calculate next available slot
+                    const newSchedule = await getNextScheduleTime(userId, uploadHour, videosPerDay);
+                    console.log(`[Upload] Auto-scheduling video ${video.id} for ${newSchedule.toISOString()}`);
+
+                    // Update DB with new schedule
+                    await prisma.video.update({
+                        where: { id: video.id },
+                        data: { scheduledFor: newSchedule }
+                    });
+
+                    scheduleTime = newSchedule;
+                    isScheduled = true;
+                }
+
+                // Determine privacy
                 const privacyStatus = isScheduled ? 'private' : 'public';
-                const publishAt = isScheduled && video.scheduledFor ? new Date(video.scheduledFor).toISOString() : undefined;
+                const publishAt = isScheduled && scheduleTime ? new Date(scheduleTime).toISOString() : undefined;
 
                 const uploadResult = await uploadVideo({
                     accessToken,
@@ -71,9 +98,11 @@ export async function POST(req: Request) {
                             status: 'UPLOADED',
                             youtubeId: uploadResult.videoId,
                             uploadedAt: new Date(),
+                            // Ensure schedule is persisted if it wasn't already
+                            scheduledFor: scheduleTime
                         }
                     });
-                    results.push({ id: video.id, status: 'success', videoId: uploadResult.videoId });
+                    results.push({ id: video.id, status: 'success', videoId: uploadResult.videoId, scheduledFor: scheduleTime });
                     successCount++;
                 } else {
                     await prisma.video.update({
