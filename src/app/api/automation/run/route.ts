@@ -122,23 +122,21 @@ export async function POST(req: Request) {
             where: { userId },
         });
 
-        if (!settings?.driveFolderLink) {
-            return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
-        }
-
         // Parse request body
         let draftOnly = false;
         let limit = 1;
         let scheduleTime: Date | undefined;
+        let providedDriveLink: string | undefined;
 
         try {
             const body = await req.json();
             draftOnly = body?.draftOnly === true;
+            providedDriveLink = body?.driveFolderLink;
 
             if (body?.limit && typeof body.limit === 'number' && body.limit > 0) {
                 limit = body.limit;
             } else {
-                limit = settings.videosPerDay || 1;
+                limit = settings?.videosPerDay || 1;
             }
 
             // Parse scheduleTime if present
@@ -149,7 +147,34 @@ export async function POST(req: Request) {
                 }
             }
         } catch (parseError) {
-            limit = settings.videosPerDay || 1;
+            limit = settings?.videosPerDay || 1;
+        }
+
+        // Use provided link or fallback to saved settings
+        const effectiveDriveLink = providedDriveLink || settings?.driveFolderLink;
+
+        if (!effectiveDriveLink) {
+            return NextResponse.json({ error: 'Please configure Google Drive folder link first' }, { status: 400 });
+        }
+
+        // If a new link is provided, save it to settings for future convenience
+        if (providedDriveLink && providedDriveLink !== settings?.driveFolderLink) {
+            try {
+                await prisma.settings.upsert({
+                    where: { userId },
+                    update: { driveFolderLink: providedDriveLink },
+                    create: {
+                        userId,
+                        driveFolderLink: providedDriveLink,
+                        uploadHour: settings?.uploadHour || 10,
+                        videosPerDay: settings?.videosPerDay || 1,
+                    },
+                });
+                console.log(`[Automation] Updated drive link for user ${userId}`);
+            } catch (dbError) {
+                console.error('[Automation] Failed to save new drive link:', dbError);
+                // Continue execution even if save fails
+            }
         }
 
         console.log(`[Automation] Manual Run - User: ${userId}, Limit: ${limit}, Draft: ${draftOnly}, Schedule: ${scheduleTime}`);
@@ -158,9 +183,9 @@ export async function POST(req: Request) {
         const result = await runAutomation(
             userId,
             accessToken,
-            settings.driveFolderLink,
+            effectiveDriveLink,
             limit,
-            settings.uploadHour,
+            settings?.uploadHour || 10,
             draftOnly,
             scheduleTime
         );

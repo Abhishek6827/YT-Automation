@@ -490,7 +490,11 @@ export default function Dashboard() {
         // scanFolderStructure(); // Removed
       }
 
-      const payload: any = { draftOnly, limit: settings.videosPerDay };
+      const payload: any = { 
+        draftOnly, 
+        limit: settings.videosPerDay,
+        driveFolderLink: settings.driveFolderLink // Pass the link explicitly
+      };
       if (customScheduleTime) {
         payload.scheduleTime = customScheduleTime.toISOString();
       }
