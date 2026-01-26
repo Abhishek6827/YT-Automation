@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer, getFileMetadata, DriveFile } from '@/lib/services/drive';
 import { generateVideoMetadata, generateMetadataFromTranscript } from '@/lib/services/ai';
-import { uploadVideo } from '@/lib/services/youtube';
+import { uploadVideo, getVideoStatus, updateVideoVisibility } from '@/lib/services/youtube';
 import { uploadAndTranscribe } from '@/lib/services/assemblyai';
 
 export interface AutomationResult {
@@ -268,14 +268,39 @@ export async function runAutomation(
                 });
 
                 if (uploadResult.success && uploadResult.videoId) {
+
+                    let finalStatus = 'UPLOADED';
+                    let safetyError: string | undefined;
+
+                    // SAFETY CHECK: Verify video has no restrictions
+                    // Only run this if we intended to schedule it (not immediate public)
+                    try {
+                        console.log(`[Automation] Video ${uploadResult.videoId} uploaded. Waiting 5s for safety check...`);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+
+                        const safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
+                        console.log(`[Automation] Safety check result for ${uploadResult.videoId}:`, JSON.stringify(safetyCheck, null, 2));
+
+                        if (safetyCheck.success && safetyCheck.hasRestrictions) {
+                            console.warn(`[Automation] Video ${file.name} has restrictions. Reverting to PRIVATE (Unscheduled).`);
+
+                            await updateVideoVisibility(accessToken, uploadResult.videoId, 'private');
+
+                            finalStatus = 'RESTRICTED';
+                            safetyError = 'Restricted (Copyright/Policy)';
+                        }
+                    } catch (err) {
+                        console.error('[Automation] Safety check failed', err);
+                    }
+
                     // Update record with success
                     await prisma.video.update({
                         where: { id: videoRecord.id },
                         data: {
-                            status: 'UPLOADED',
+                            status: finalStatus,
                             youtubeId: uploadResult.videoId,
                             uploadedAt: new Date(),
-                            scheduledFor: scheduleTime,
+                            scheduledFor: finalStatus === 'RESTRICTED' ? null : scheduleTime,
                         },
                     });
 
@@ -284,6 +309,7 @@ export async function runAutomation(
                         fileName: file.name,
                         status: 'uploaded',
                         youtubeId: uploadResult.videoId,
+                        error: safetyError
                     });
                 } else {
                     // Update record with failure
