@@ -97,8 +97,13 @@ export async function POST(req: Request) {
                     let safetyError: string | undefined;
 
                     try {
-                        // Check status immediately
+                        // Wait for YouTube to process initial checks (5 seconds)
+                        console.log(`[Upload] Video ${uploadResult.videoId} uploaded. Waiting 5s for safety check...`);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+
+                        // Check status
                         const safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
+                        console.log(`[Upload] Safety check result for ${uploadResult.videoId}:`, JSON.stringify(safetyCheck, null, 2));
 
                         if (safetyCheck.success && safetyCheck.hasRestrictions) {
                             console.warn(`[Upload] Video ${video.id} has restrictions. Reverting to PRIVATE (Unscheduled).`);
