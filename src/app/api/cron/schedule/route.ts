@@ -1,73 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { runAutomation } from '@/lib/services/automation';
 
+export const dynamic = 'force-dynamic';
+
 // This endpoint is designed to be called by Vercel Cron or external scheduler
-// GET /api/cron/schedule - Daily scheduled upload
+// GET /api/cron/schedule - Hourly check for scheduled uploads
 
 export async function GET(request: NextRequest) {
     try {
-        // Verify cron secret for security (optional but recommended)
         const authHeader = request.headers.get('authorization');
         const cronSecret = process.env.CRON_SECRET;
+        const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
-        if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-            // For development/testing, allow without secret
-            console.log('[Cron] Warning: No CRON_SECRET configured or mismatch');
+        if (!isCron) {
+            // Optional: Fail if not cron, or just log
+            console.log('[Cron] Warning: Request missing valid Authorization header');
         }
 
-        const session = await auth();
-        if (!session?.accessToken) {
-            return NextResponse.json(
-                { error: 'No active session - user needs to be logged in' },
-                { status: 401 }
-            );
-        }
+        console.log('[Cron] Execution started');
 
-        // Get settings for this user
-        const settings = await prisma.settings.findUnique({
-            where: { userId: session.user?.id }
+        // 1. Find all users with configured settings
+        const allSettings = await prisma.settings.findMany({
+            where: {
+                driveFolderLink: { not: null },
+                userId: { not: undefined }
+            },
+            include: {
+                user: {
+                    include: {
+                        accounts: {
+                            where: { provider: 'google' }
+                        }
+                    }
+                }
+            }
         });
 
-        if (!settings?.driveFolderLink) {
-            return NextResponse.json(
-                { error: 'No Drive folder configured' },
-                { status: 400 }
-            );
+        console.log(`[Cron] Found ${allSettings.length} users with configured settings`);
+        const results = [];
+        const currentHour = new Date().getUTCHours(); // Server runs in UTC usually. Use UTC for consistency.
+
+        // 2. Iterate each user
+        for (const setting of allSettings) {
+            const user = setting.user;
+
+            // Validate User & Token
+            if (!user || !user.accounts[0]?.refresh_token) {
+                console.log(`[Cron] Skipping user ${user?.id}: No Google account/refresh token`);
+                continue;
+            }
+
+            // Time Check: Does user want to upload at this hour?
+            // setting.uploadHour is stored as UTC (0-23)
+            if (setting.uploadHour !== currentHour) {
+                // Skip if not the right hour
+                continue;
+            }
+
+            console.log(`[Cron] Processing user: ${user.id} at hour ${currentHour}`);
+
+            // 3. Refresh Token
+            let accessToken: string | undefined;
+            try {
+                const { google } = await import('googleapis');
+                const authClient = new google.auth.OAuth2(
+                    process.env.GOOGLE_CLIENT_ID,
+                    process.env.GOOGLE_CLIENT_SECRET
+                );
+                authClient.setCredentials({ refresh_token: user.accounts[0].refresh_token });
+                const { credentials } = await authClient.refreshAccessToken();
+                accessToken = credentials.access_token || undefined;
+            } catch (refreshError) {
+                console.error(`[Cron] Failed to refresh token for user ${user.id}:`, refreshError);
+                continue;
+            }
+
+            if (!accessToken) continue;
+
+            // 4. Run Automation
+            try {
+                const result = await runAutomation(
+                    user.id,
+                    accessToken,
+                    setting.driveFolderLink!,
+                    setting.videosPerDay,
+                    setting.uploadHour
+                );
+                results.push({ userId: user.id, success: true, result });
+            } catch (runError) {
+                console.error(`[Cron] Automation failed for user ${user.id}:`, runError);
+                results.push({ userId: user.id, success: false, error: String(runError) });
+            }
         }
-
-        // Check current hour against upload hour setting
-        const currentHour = new Date().getHours();
-        const uploadHour = settings.uploadHour;
-
-        // For testing, allow anytime. In production, check hour.
-        const isTestMode = request.nextUrl.searchParams.get('test') === 'true';
-
-        if (!isTestMode && currentHour !== uploadHour) {
-            return NextResponse.json({
-                message: `Skipping - current hour (${currentHour}) doesn't match upload hour (${uploadHour})`,
-                nextRun: `${uploadHour}:00`,
-            });
-        }
-
-        console.log(`[Cron] Running scheduled upload - limit: ${settings.videosPerDay}`);
-
-        // Run automation with daily limit
-        const result = await runAutomation(
-            session.user?.id as string,
-            session.accessToken,
-            settings.driveFolderLink,
-            settings.videosPerDay,
-            settings.uploadHour,
-            false // Not draft only - actually upload
-        );
 
         return NextResponse.json({
             success: true,
-            scheduled: true,
-            ...result,
+            processedCount: results.length,
+            results
         });
+
     } catch (error) {
         console.error('[Cron] Scheduled upload error:', error);
         return NextResponse.json(

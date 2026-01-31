@@ -1282,8 +1282,22 @@ export default function Dashboard() {
 
                 <div className="pt-2 border-t border-zinc-800">
                   <Button
+                    onClick={() => {
+                      // Pre-fill with the next occurrence of the default schedule
+                      const now = new Date();
+                      const target = new Date();
+                      target.setUTCHours(settings.uploadHour, 0, 0, 0);
 
-                    onClick={() => setIsScheduleOpen(true)}
+                      // If target UTC time results in a local time that is in the past, move to tomorrow
+                      if (target <= now) {
+                        target.setDate(target.getDate() + 1);
+                      }
+
+                      // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+                      const localIso = new Date(target.getTime() - (target.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                      setScheduleDateTime(localIso);
+                      setIsScheduleOpen(true);
+                    }}
                     className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
                   >
                     📅 Run & Schedule Automation
