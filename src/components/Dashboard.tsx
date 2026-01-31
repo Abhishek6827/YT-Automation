@@ -487,7 +487,8 @@ export default function Dashboard() {
   const runAutomation = async (
     draftOnly: boolean = false,
     customScheduleTime?: Date,
-    immediate: boolean = false
+    immediate: boolean = false,
+    newDailyScheduleHour?: number
   ) => {
     setIsRunning(true);
     setLastResult(null);
@@ -501,7 +502,8 @@ export default function Dashboard() {
         draftOnly, 
         limit: settings.videosPerDay,
         driveFolderLink: settings.driveFolderLink, // Pass the link explicitly
-        immediate
+        immediate,
+        newDailyScheduleHour // Pass the new daily schedule preference
       };
       if (customScheduleTime) {
         payload.scheduleTime = customScheduleTime.toISOString();
@@ -1245,7 +1247,7 @@ export default function Dashboard() {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-zinc-500 text-[10px] uppercase tracking-wider">
-                           Daily Schedule (UTC)
+                           Daily Schedule (Time)
                         </Label>
                         <Select
                           value={String(settings.uploadHour)}
@@ -1257,12 +1259,18 @@ export default function Dashboard() {
                             <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <SelectItem key={i} value={String(i)} className="text-xs">
-                                {i.toString().padStart(2, "0")}:00{" "}
-                                {i < 12 ? "AM" : "PM"}
-                              </SelectItem>
-                            ))}
+                            {Array.from({ length: 24 }, (_, i) => {
+                              // Create a date for today with this UTC hour
+                              const date = new Date();
+                              date.setUTCHours(i, 0, 0, 0);
+                              // Format to local time string
+                              const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                              return (
+                                <SelectItem key={i} value={String(i)} className="text-xs">
+                                  {timeString} (UTC {i}:00)
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1274,44 +1282,15 @@ export default function Dashboard() {
 
                 <div className="pt-2 border-t border-zinc-800">
                   <Button
+
                     onClick={() => setIsScheduleOpen(true)}
                     className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
                   >
-                    📅 Schedule Output for Later
+                    📅 Run & Schedule Automation
                   </Button>
                 </div>
 
                 <div className="pt-2 space-y-3">
-                  <Button
-                    onClick={() => runAutomation(true)}
-                    disabled={isRunning || !settings.driveFolderLink}
-                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-medium transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isRunning ? (
-                      <>
-                        <RefreshIcon spinning />{" "}
-                        <span className="ml-2">Scanning...</span>
-                      </>
-                    ) : (
-                      <>
-                        <SparklesIcon />
-                        <span className="ml-2">
-                          Sync & Create Drafts
-                        </span>
-                      </>
-                    )}
-                  </Button>
-
-                  <Button
-                    onClick={() => runAutomation(false, undefined, false)}
-                    disabled={isRunning || !settings.driveFolderLink}
-                    variant="default"
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-lg shadow-indigo-900/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                     <span className="mr-2">🗓️</span>
-                     <span className="">Sync & Auto-Schedule</span>
-                  </Button>
-
                   <Button
                     onClick={() => runAutomation(false, undefined, true)}
                     disabled={isRunning || !settings.driveFolderLink}
@@ -1319,7 +1298,7 @@ export default function Dashboard() {
                     className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium border border-zinc-700/50 transition-all duration-300"
                   >
                     <PlayIcon />
-                    <span className="ml-2">Sync & Upload (Public)</span>
+                    <span className="ml-2">Run Instant Upload (Public)</span>
                   </Button>
 
                   <Button
@@ -2042,10 +2021,10 @@ export default function Dashboard() {
             ) : driveFiles.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40">
                 <p className="text-zinc-500">
-                  No files found or unable to access folder.
+                  No video files found.
                 </p>
-                <p className="text-zinc-600 text-xs mt-1">
-                  Check permissions and folder link.
+                <p className="text-zinc-600 text-xs mt-1 text-center max-w-xs">
+                  If you have files, ensure the Drive folder is shared with the Google Account you signed in with.
                 </p>
               </div>
             ) : (
@@ -2134,7 +2113,9 @@ export default function Dashboard() {
             <Button
               onClick={() => {
                 if (scheduleDateTime) {
-                  runAutomation(false, new Date(scheduleDateTime));
+                  const date = new Date(scheduleDateTime);
+                  const utcHour = date.getUTCHours();
+                  runAutomation(false, date, false, utcHour);
                 }
               }}
               disabled={!scheduleDateTime || isRunning}

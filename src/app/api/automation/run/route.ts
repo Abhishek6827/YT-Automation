@@ -128,6 +128,7 @@ export async function POST(req: Request) {
         let scheduleTime: Date | undefined;
         let providedDriveLink: string | undefined;
         let immediate = false;
+        let newDailyScheduleHour: number | undefined;
 
         try {
             const body = await req.json();
@@ -148,6 +149,7 @@ export async function POST(req: Request) {
                     scheduleTime = undefined;
                 }
             }
+            newDailyScheduleHour = body?.newDailyScheduleHour;
         } catch (parseError) {
             limit = settings?.videosPerDay || 1;
         }
@@ -160,28 +162,43 @@ export async function POST(req: Request) {
         }
 
         // If a new link is provided, save it to settings for future convenience
-        if (providedDriveLink && providedDriveLink !== settings?.driveFolderLink) {
+        // Also update uploadHour if provided (syncing daily schedule with manual schedule run)
+
+
+        if ((providedDriveLink && providedDriveLink !== settings?.driveFolderLink) || (newDailyScheduleHour !== undefined)) {
             try {
                 // Use explicit update/create to avoid potential P2002 race conditions with upsert on some Prisma versions/drivers
                 const existingSettings = await prisma.settings.findUnique({ where: { userId } });
-                if (existingSettings) {
-                    await prisma.settings.update({
-                        where: { userId },
-                        data: { driveFolderLink: providedDriveLink }
-                    });
-                } else {
-                    await prisma.settings.create({
-                        data: {
-                            userId,
-                            driveFolderLink: providedDriveLink,
-                            uploadHour: 10,
-                            videosPerDay: 1
-                        }
-                    });
+                const updateData: any = {};
+
+                if (providedDriveLink && providedDriveLink !== settings?.driveFolderLink) {
+                    updateData.driveFolderLink = providedDriveLink;
                 }
-                console.log(`[Automation] Updated drive link for user ${userId}`);
+
+                if (newDailyScheduleHour !== undefined && typeof newDailyScheduleHour === 'number') {
+                    updateData.uploadHour = newDailyScheduleHour;
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                    if (existingSettings) {
+                        await prisma.settings.update({
+                            where: { userId },
+                            data: updateData
+                        });
+                    } else {
+                        await prisma.settings.create({
+                            data: {
+                                userId,
+                                driveFolderLink: providedDriveLink || "",
+                                uploadHour: newDailyScheduleHour !== undefined ? newDailyScheduleHour : 10,
+                                videosPerDay: 1
+                            }
+                        });
+                    }
+                    console.log(`[Automation] Updated settings for user ${userId}:`, updateData);
+                }
             } catch (dbError) {
-                console.warn('[Automation] Note: Failed to save new drive link preference (non-critical):', dbError instanceof Error ? dbError.message : 'Unknown DB error');
+                console.warn('[Automation] Note: Failed to save settings preference (non-critical):', dbError instanceof Error ? dbError.message : 'Unknown DB error');
                 // Continue execution
             }
         }
