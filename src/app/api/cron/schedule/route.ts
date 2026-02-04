@@ -51,14 +51,8 @@ export async function GET(request: NextRequest) {
                 continue;
             }
 
-            // Time Check: Does user want to upload at this hour?
-            // setting.uploadHour is stored as UTC (0-23)
-            if (setting.uploadHour !== currentHour) {
-                // Skip if not the right hour
-                continue;
-            }
-
-            console.log(`[Cron] Processing user: ${user.id} at hour ${currentHour}`);
+            // Validation passed
+            console.log(`[Cron] Processing user: ${user.id} (Daily Run)`);
 
             // 3. Refresh Token
             let accessToken: string | undefined;
