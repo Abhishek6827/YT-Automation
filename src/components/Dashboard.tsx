@@ -1274,7 +1274,7 @@ export default function Dashboard() {
                                     <p className="text-xs text-zinc-500 truncate mb-2" title={job.driveFolderLink}>{job.driveFolderLink}</p>
                                     <div className="flex gap-2 text-[10px] text-zinc-400 mb-3">
                                         <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                            {job.uploadHour}:00 UTC
+                                            {(job.uploadHour % 12 || 12)}:00 {job.uploadHour >= 12 ? 'PM' : 'AM'} UTC
                                         </span>
                                         <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
                                             {job.videosPerDay} vids/day
@@ -1347,13 +1347,27 @@ export default function Dashboard() {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-zinc-400 text-xs uppercase tracking-wider">Hour (UTC)</Label>
-                                <Input 
-                                    type="number"
-                                    value={editingJob.uploadHour || 10}
-                                    onChange={e => setEditingJob({...editingJob, uploadHour: parseInt(e.target.value)})}
-                                    className="bg-zinc-950 border-zinc-700 h-8 text-xs"
-                                    min={0} max={23}
-                                />
+                                <Select 
+                                    value={editingJob.uploadHour?.toString() || "10"} 
+                                    onValueChange={(val) => setEditingJob({...editingJob, uploadHour: parseInt(val)})}
+                                >
+                                    <SelectTrigger className="bg-zinc-950 border-zinc-700 h-8 text-xs w-full">
+                                        <SelectValue placeholder="Select hour" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-60">
+                                        {Array.from({ length: 24 }).map((_, i) => {
+                                            const hour = i;
+                                            const ampm = hour >= 12 ? 'PM' : 'AM';
+                                            const displayHour = hour % 12 || 12;
+                                            const label = `${displayHour}:00 ${ampm} (UTC)`;
+                                            return (
+                                                <SelectItem key={i} value={i.toString()}>
+                                                    {label}
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <div className="flex gap-2 pt-2">
