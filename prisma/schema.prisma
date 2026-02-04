@@ -34,6 +34,8 @@ model Video {
   updatedAt   DateTime  @updatedAt
   
   copyrightLogs CopyrightLog[]
+  jobId       String?
+  automationJob AutomationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
 }
 
 model Folder {
@@ -112,6 +114,21 @@ model User {
   videos        Video[]
   folders       Folder[]
   settings      Settings?
+  jobs          AutomationJob[]
+}
+
+model AutomationJob {
+  id              String   @id @default(cuid())
+  name            String   @default("My Automation")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driveFolderLink String
+  uploadHour      Int      @default(10)
+  videosPerDay    Int      @default(1)
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  videos          Video[]
 }
 
 model VerificationToken {

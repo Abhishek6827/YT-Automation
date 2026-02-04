@@ -1,108 +1,92 @@
 import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/settings - Get settings for the current user
+// GET /api/settings - Get user and their automation jobs
 export async function GET() {
     const session = await auth();
-    console.log('[Settings GET] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    let effectiveUserId: string | undefined = session?.user?.id;
-    if (!effectiveUserId && session?.accessToken) {
-        try {
-            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
-            if (account?.userId) {
-                effectiveUserId = account.userId;
-                console.log('[Settings GET] Resolved userId from Account via access_token:', effectiveUserId);
-            }
-        } catch (e) {
-            console.error('[Settings GET] Error looking up account by access token:', e);
-        }
-    }
-    if (!effectiveUserId) {
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        const settings = await prisma.settings.findUnique({
-            where: { userId: effectiveUserId },
+        const query = {
+            where: { id: session.user.id },
+            include: {
+                jobs: {
+                    orderBy: { createdAt: 'desc' as const }
+                }
+            }
+        };
+        const user = await prisma.user.findUnique(query);
+
+        if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+        return NextResponse.json({
+            jobs: user.jobs
         });
-
-        if (!settings) {
-            // Create default settings if not exists
-            const newSettings = await prisma.settings.create({
-                data: {
-                    userId: effectiveUserId,
-                    uploadHour: 10,
-                    videosPerDay: 1,
-                },
-            });
-            return NextResponse.json(newSettings);
-        }
-
-        return NextResponse.json(settings);
     } catch (error) {
         console.error('Error fetching settings:', error);
         return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
 }
 
-// POST /api/settings - Update settings
+// POST /api/settings - Create or Update Automation Job
 export async function POST(req: Request) {
     const session = await auth();
-    console.log('[Settings POST] session:', { userId: session?.user?.id, hasAccessToken: !!session?.accessToken, error: session?.error });
-    let effectiveUserId: string | undefined = session?.user?.id;
-    if (!effectiveUserId && session?.accessToken) {
-        try {
-            const account = await prisma.account.findFirst({ where: { access_token: session.accessToken } });
-            if (account?.userId) {
-                effectiveUserId = account.userId;
-                console.log('[Settings POST] Resolved userId from Account via access_token:', effectiveUserId);
-            }
-        } catch (e) {
-            console.error('[Settings POST] Error looking up account by access token:', e);
-        }
-    }
-    if (!effectiveUserId) {
+    if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
         const body = await req.json();
-        const { driveFolderLink, uploadHour, videosPerDay } = body || {};
+        const { id, name, driveFolderLink, uploadHour, videosPerDay, enabled, action } = body;
 
-        // Helper to parse integers safely and fallback to defaults
-        const parseIntSafe = (val: any, fallback: number) => {
-            if (val === undefined || val === null) return fallback;
-            const n = parseInt(String(val), 10);
-            return Number.isNaN(n) ? fallback : n;
+        // DELETE action
+        if (action === 'delete' && id) {
+            await prisma.automationJob.deleteMany({
+                where: {
+                    id: id,
+                    userId: session.user.id // Ensure ownership
+                }
+            });
+            return NextResponse.json({ success: true });
+        }
+
+        // Validate common fields
+        if (!driveFolderLink) {
+            return NextResponse.json({ error: 'Drive Link is required' }, { status: 400 });
+        }
+
+        const jobData = {
+            name: name || 'My Automation',
+            driveFolderLink: driveFolderLink.trim(),
+            uploadHour: Number(uploadHour) || 10,
+            videosPerDay: Number(videosPerDay) || 1,
+            enabled: enabled !== undefined ? enabled : true,
         };
 
-        const safeUploadHour = parseIntSafe(uploadHour, 10);
-        const safeVideosPerDay = parseIntSafe(videosPerDay, 1);
+        if (id) {
+            // Update existing job
+            const updatedJob = await prisma.automationJob.updateMany({
+                where: { id: id, userId: session.user.id },
+                data: jobData
+            });
+            return NextResponse.json(updatedJob);
+        } else {
+            // Create new job
+            const newJob = await prisma.automationJob.create({
+                data: {
+                    userId: session.user.id,
+                    ...jobData
+                }
+            });
+            return NextResponse.json(newJob);
+        }
 
-        // Normalize driveFolderLink: treat empty strings as null
-        const safeDriveFolderLink = typeof driveFolderLink === 'string' && driveFolderLink.trim() !== ''
-            ? driveFolderLink.trim()
-            : null;
-
-        const settings = await prisma.settings.upsert({
-            where: { userId: effectiveUserId },
-            update: {
-                driveFolderLink: safeDriveFolderLink,
-                uploadHour: safeUploadHour,
-                videosPerDay: safeVideosPerDay,
-            },
-            create: {
-                userId: effectiveUserId,
-                driveFolderLink: safeDriveFolderLink,
-                uploadHour: safeUploadHour,
-                videosPerDay: safeVideosPerDay,
-            },
-        });
-
-        return NextResponse.json(settings);
     } catch (error) {
         console.error('Error updating settings:', error);
         return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });

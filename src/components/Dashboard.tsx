@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Settings as CogIcon, ChevronDown as ChevronDownIcon } from "lucide-react";
 
-// Helper to ensure requests include cookies (NextAuth session)
+// ... imports
+
 const apiFetch = (input: RequestInfo, init?: RequestInit) => {
   return fetch(input, {
     credentials: "include",
@@ -87,11 +88,54 @@ interface CopyrightStatus {
   claimed: number;
 }
 
-interface Settings {
-  driveFolderLink: string | null;
+interface AutomationJob {
+  id: string;
+  name: string;
+  driveFolderLink: string;
   uploadHour: number;
   videosPerDay: number;
+  enabled: boolean;
 }
+
+interface ChannelInfo {
+  id: string;
+  title: string;
+  thumbnail: string;
+  subscriberCount: string;
+  videoCount: string;
+}
+
+interface AutomationResult {
+  processed: number;
+  uploaded: number;
+  failed: number;
+  errors: string[];
+  details: {
+    fileName: string;
+    status: string;
+    youtubeId?: string;
+    error?: string;
+  }[];
+}
+
+// ... Icons (Keep them, they are outside this range usually, but check lines)
+// Lines 90-116 were interfaces. I'll replace from there.
+// Wait, I am replacing lines 359-544 (Component Body). 
+// I also need to update interface around line 90.
+// I will do TWO edits. One for interface, one for component body.
+
+// EDIT 1: Interface
+// I will split this into multiple tool calls or use the tool twice?
+// I can only use tool once per turn? No, I can use sequential if `waitForPreviousTools` is true.
+// Actually, `replace_file_content` works on a single block?
+// No, I can use `multi_replace_file_content` if blocks are non-contiguous.
+// Yes! `multi_replace_file_content` is perfect here.
+
+// But wait, the previous `view_file` showed lines 1-800.
+// Interface `Settings` is at line 90.
+// Component body starts at 359.
+// They are far apart. I'll use `multi_replace_file_content`.
+
 
 interface ChannelInfo {
   id: string;
@@ -358,11 +402,12 @@ const FolderTreeItem = ({
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
-  const [settings, setSettings] = useState<Settings>({
-    driveFolderLink: "",
-    uploadHour: 10,
-    videosPerDay: 1,
-  });
+  
+  // State for Automation Jobs
+  const [jobs, setJobs] = useState<AutomationJob[]>([]);
+  const [isJobFormOpen, setIsJobFormOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<Partial<AutomationJob> | null>(null);
+
   const [videos, setVideos] = useState<Video[]>([]);
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -410,17 +455,18 @@ export default function Dashboard() {
   // Schedule Modal State
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [scheduleDateTime, setScheduleDateTime] = useState("");
+  const [jobToSchedule, setJobToSchedule] = useState<AutomationJob | null>(null); // Track which job we are scheduling
 
   // Fetch functions
-  const fetchSettings = useCallback(async () => {
+  const fetchJobs = useCallback(async () => {
     try {
       const res = await apiFetch("/api/settings");
       if (res.ok) {
         const data = await res.json();
-        if (data) setSettings(data);
+        if (data.jobs) setJobs(data.jobs);
       }
     } catch (error) {
-      console.error("Error fetching settings:", error);
+      console.error("Error fetching jobs:", error);
     }
   }, []);
 
@@ -462,48 +508,61 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      fetchSettings();
+      fetchJobs();
       fetchVideos();
       fetchChannel();
       fetchStatus();
     }
-  }, [status, fetchSettings, fetchVideos, fetchChannel, fetchStatus]);
+  }, [status, fetchJobs, fetchVideos, fetchChannel, fetchStatus]);
 
-  const saveSettings = async () => {
+  const saveJob = async (jobData: Partial<AutomationJob>) => {
     setIsSaving(true);
     try {
       await apiFetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(jobData),
       });
-      fetchStatus();
+      setIsJobFormOpen(false);
+      setEditingJob(null);
+      fetchJobs();
     } catch (error) {
-      console.error("Error saving settings:", error);
+      console.error("Error saving job:", error);
+      alert("Failed to save automation");
     }
     setIsSaving(false);
   };
 
+  const deleteJob = async (id: string) => {
+    if(!confirm("Are you sure you want to delete this automation?")) return;
+    try {
+        await apiFetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, action: "delete" }),
+        });
+        fetchJobs();
+    } catch(e) {
+        alert("Failed to delete job");
+    }
+  }
+
   const runAutomation = async (
+    job: AutomationJob,
     draftOnly: boolean = false,
     customScheduleTime?: Date,
-    immediate: boolean = false,
-    newDailyScheduleHour?: number
+    immediate: boolean = false
   ) => {
     setIsRunning(true);
     setLastResult(null);
     try {
-      // Also scan folder structure to show progress
-      if (settings.driveFolderLink) {
-        // scanFolderStructure(); // Removed
-      }
-
       const payload: any = { 
         draftOnly, 
-        limit: settings.videosPerDay,
-        driveFolderLink: settings.driveFolderLink, // Pass the link explicitly
+        limit: job.videosPerDay,
+        driveFolderLink: job.driveFolderLink, 
         immediate,
-        newDailyScheduleHour // Pass the new daily schedule preference
+        newDailyScheduleHour: job.uploadHour,
+        jobId: job.id
       };
       if (customScheduleTime) {
         payload.scheduleTime = customScheduleTime.toISOString();
@@ -527,8 +586,7 @@ export default function Dashboard() {
         setLastResult(data);
         fetchVideos();
         fetchStatus();
-        fetchStatus();
-        setIsScheduleOpen(false); // Close modal on success
+        setIsScheduleOpen(false); 
       }
     } catch (error) {
       console.error("Error running automation:", error);
@@ -1166,164 +1224,156 @@ export default function Dashboard() {
           <div className="lg:col-span-1 space-y-6">
             <Card className="bg-zinc-900/50 border-zinc-800/50 sticky top-24">
               <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg text-white">
-                      Automation
-                    </CardTitle>
-                    <CardDescription className="text-zinc-500 text-xs">
-                      Configure your upload schedule
-                    </CardDescription>
-                  </div>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg text-white">
+                            Automation Jobs
+                            </CardTitle>
+                            <CardDescription className="text-zinc-500 text-xs">
+                            Manage your multiple automation tasks
+                            </CardDescription>
+                        </div>
+                    </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                    Drive Link (File or Folder)
-                  </Label>
-                  <Input
-                    value={settings.driveFolderLink || ""}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        driveFolderLink: e.target.value,
-                      })
-                    }
-                    className="bg-zinc-950 border-zinc-700 text-zinc-300 focus:border-blue-500"
-                    placeholder="https://drive.google.com/..."
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={openDrivePreview}
-                      className="text-xs text-blue-400 hover:text-blue-300 h-6 px-2"
-                    >
-                      <EyeIcon /> <span className="ml-1">Preview Files</span>
-                    </Button>
-                  </div>
-                </div>
+                
+                {/* List Mode */}
+                {!isJobFormOpen && (
+                    <div className="space-y-4">
+                        <Button 
+                            onClick={() => {
+                                setEditingJob({ name: 'New Automation', driveFolderLink: '', uploadHour: 10, videosPerDay: 1, enabled: true });
+                                setIsJobFormOpen(true);
+                            }}
+                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white"
+                        >
+                            + Add New Automation
+                        </Button>
 
-                <Collapsible>
-                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between text-zinc-400 hover:text-zinc-300 p-0 h-auto mb-2">
-                      <span className="text-xs uppercase tracking-wider flex items-center gap-1">
-                        <CogIcon className="w-3 h-3" /> Default Settings
-                      </span>
-                      <ChevronDownIcon className="w-3 h-3" />
-                    </Button>
-                   </CollapsibleTrigger>
-                   <CollapsibleContent className="space-y-4 animate-in slide-in-from-top-2">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-zinc-500 text-[10px] uppercase tracking-wider">
-                          Daily Limit
-                        </Label>
-                        <Select
-                          value={String(settings.videosPerDay)}
-                          onValueChange={(v) =>
-                            setSettings({ ...settings, videosPerDay: parseInt(v) })
-                          }
-                        >
-                          <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50 h-8 text-xs">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                            {[1, 3, 5, 10, 20, 50, 100, 500, 1000, 10000].map(
-                              (n) => (
-                                <SelectItem key={n} value={String(n)} className="text-xs">
-                                  {n} video{n > 1 ? "s" : ""}/day
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-zinc-500 text-[10px] uppercase tracking-wider">
-                           Daily Schedule (Time)
-                        </Label>
-                        <Select
-                          value={String(settings.uploadHour)}
-                          onValueChange={(v) =>
-                            setSettings({ ...settings, uploadHour: parseInt(v) })
-                          }
-                        >
-                          <SelectTrigger className="bg-zinc-950/50 border-zinc-700/50 h-8 text-xs">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                            {Array.from({ length: 24 }, (_, i) => {
-                              // Create a date for today with this UTC hour
-                              const date = new Date();
-                              date.setUTCHours(i, 0, 0, 0);
-                              // Format to local time string
-                              const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                              return (
-                                <SelectItem key={i} value={String(i)} className="text-xs">
-                                  {timeString} (UTC {i}:00)
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                        <div className="space-y-3">
+                            {jobs.map(job => (
+                                <div key={job.id} className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50 hover:border-zinc-700 transition-all">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="font-bold text-sm text-zinc-200">{job.name}</h3>
+                                        <div className="flex gap-1">
+                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setEditingJob(job); setIsJobFormOpen(true); }}>
+                                                <EditIcon />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400" onClick={() => deleteJob(job.id)}>
+                                                <TrashIcon />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-zinc-500 truncate mb-2" title={job.driveFolderLink}>{job.driveFolderLink}</p>
+                                    <div className="flex gap-2 text-[10px] text-zinc-400 mb-3">
+                                        <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                            {job.uploadHour}:00 UTC
+                                        </span>
+                                        <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                            {job.videosPerDay} vids/day
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            size="sm" 
+                                            variant="secondary"
+                                            className="grow h-7 text-xs bg-zinc-800 border-zinc-700" 
+                                            disabled={isRunning}
+                                            onClick={() => runAutomation(job, false, undefined, true)}
+                                        >
+                                            <PlayIcon /> <span className="ml-1">Run Now</span>
+                                        </Button>
+                                        <Button 
+                                            size="sm" 
+                                            variant="outline"
+                                            className="grow h-7 text-xs border-zinc-700 text-zinc-400"
+                                            onClick={() => {
+                                                const now = new Date();
+                                                const target = new Date();
+                                                target.setUTCHours(job.uploadHour, 0, 0, 0);
+                                                if (target <= now) target.setDate(target.getDate() + 1);
+                                                const localIso = new Date(target.getTime() - (target.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                                                setScheduleDateTime(localIso);
+                                                setJobToSchedule(job);
+                                                setIsScheduleOpen(true);
+                                            }}
+                                        >
+                                            Schedule
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                            {jobs.length === 0 && <p className="text-center text-xs text-zinc-600 py-4">No automations yet.</p>}
+                        </div>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                )}
 
-
-
-                <div className="pt-2 border-t border-zinc-800">
-                  <Button
-                    onClick={() => {
-                      // Pre-fill with the next occurrence of the default schedule
-                      const now = new Date();
-                      const target = new Date();
-                      target.setUTCHours(settings.uploadHour, 0, 0, 0);
-
-                      // If target UTC time results in a local time that is in the past, move to tomorrow
-                      if (target <= now) {
-                        target.setDate(target.getDate() + 1);
-                      }
-
-                      // Format for datetime-local input (YYYY-MM-DDTHH:mm)
-                      const localIso = new Date(target.getTime() - (target.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
-                      setScheduleDateTime(localIso);
-                      setIsScheduleOpen(true);
-                    }}
-                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
-                  >
-                    📅 Run & Schedule Automation
-                  </Button>
-                </div>
-
-                <div className="pt-2 space-y-3">
-                  <Button
-                    onClick={() => runAutomation(false, undefined, true)}
-                    disabled={isRunning || !settings.driveFolderLink}
-                    variant="secondary"
-                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium border border-zinc-700/50 transition-all duration-300"
-                  >
-                    <PlayIcon />
-                    <span className="ml-2">Run Instant Upload (Public)</span>
-                  </Button>
-
-                  <Button
-                    onClick={saveSettings}
-                    disabled={isSaving}
-                    variant="outline"
-                    className="w-full border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-300"
-                  >
-                    {isSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </div>
+                {/* Form Mode */}
+                {isJobFormOpen && editingJob && (
+                    <div className="space-y-4 animate-in slide-in-from-right-4">
+                        <div className="space-y-2">
+                             <Label className="text-zinc-400 text-xs uppercase tracking-wider">Name</Label>
+                             <Input 
+                                value={editingJob.name || ''} 
+                                onChange={e => setEditingJob({...editingJob, name: e.target.value})}
+                                className="bg-zinc-950 border-zinc-700 h-8 text-xs"
+                             />
+                        </div>
+                        <div className="space-y-2">
+                             <Label className="text-zinc-400 text-xs uppercase tracking-wider">Drive Link</Label>
+                             <Input 
+                                value={editingJob.driveFolderLink || ''} 
+                                onChange={e => setEditingJob({...editingJob, driveFolderLink: e.target.value})}
+                                className="bg-zinc-950 border-zinc-700 h-8 text-xs"
+                                placeholder="https://drive.google.com/..."
+                             />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Daily Limit</Label>
+                                <Input 
+                                    type="number"
+                                    value={editingJob.videosPerDay || 1}
+                                    onChange={e => setEditingJob({...editingJob, videosPerDay: parseInt(e.target.value)})}
+                                    className="bg-zinc-950 border-zinc-700 h-8 text-xs"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Hour (UTC)</Label>
+                                <Input 
+                                    type="number"
+                                    value={editingJob.uploadHour || 10}
+                                    onChange={e => setEditingJob({...editingJob, uploadHour: parseInt(e.target.value)})}
+                                    className="bg-zinc-950 border-zinc-700 h-8 text-xs"
+                                    min={0} max={23}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <Button 
+                                variant="ghost" 
+                                className="flex-1"
+                                onClick={() => { setIsJobFormOpen(false); setEditingJob(null); }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+                                onClick={() => saveJob(editingJob)}
+                                disabled={isSaving}
+                            >
+                                {isSaving ? 'Saving...' : 'Save Job'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Copyright Status Section */}
                 {copyrightStatus && (
@@ -2126,10 +2176,9 @@ export default function Dashboard() {
             </Button>
             <Button
               onClick={() => {
-                if (scheduleDateTime) {
+                if (scheduleDateTime && jobToSchedule) {
                   const date = new Date(scheduleDateTime);
-                  const utcHour = date.getUTCHours();
-                  runAutomation(false, date, false, utcHour);
+                  runAutomation(jobToSchedule, false, date, false);
                 }
               }}
               disabled={!scheduleDateTime || isRunning}

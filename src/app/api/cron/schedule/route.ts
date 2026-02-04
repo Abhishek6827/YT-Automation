@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { runAutomation } from '@/lib/services/automation';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
+
 
 // This endpoint is designed to be called by Vercel Cron or external scheduler
 // GET /api/cron/schedule - Hourly check for scheduled uploads
@@ -20,41 +22,43 @@ export async function GET(request: NextRequest) {
 
         console.log('[Cron] Execution started');
 
-        // 1. Find all users with configured settings
-        const allSettings = await prisma.settings.findMany({
+        // 1. Find all users with active automation jobs
+        // We look for users who have at least one enabled job
+        const userQuery = {
             where: {
-                driveFolderLink: { not: null },
-                userId: { not: undefined }
+                jobs: {
+                    some: { enabled: true }
+                },
+                accounts: {
+                    some: { provider: 'google' }
+                }
             },
             include: {
-                user: {
-                    include: {
-                        accounts: {
-                            where: { provider: 'google' }
-                        }
-                    }
+                jobs: {
+                    where: { enabled: true }
+                },
+                accounts: {
+                    where: { provider: 'google' }
                 }
             }
-        });
+        };
 
-        console.log(`[Cron] Found ${allSettings.length} users with configured settings`);
+        const usersWithJobs = await prisma.user.findMany(userQuery);
+
+        console.log(`[Cron] Found ${usersWithJobs.length} users with active automations`);
         const results = [];
-        const currentHour = new Date().getUTCHours(); // Server runs in UTC usually. Use UTC for consistency.
+        const currentHour = new Date().getUTCHours();
 
         // 2. Iterate each user
-        for (const setting of allSettings) {
-            const user = setting.user;
+        for (const user of usersWithJobs) {
 
-            // Validate User & Token
-            if (!user || !user.accounts[0]?.refresh_token) {
-                console.log(`[Cron] Skipping user ${user?.id}: No Google account/refresh token`);
+            // Validate Token
+            if (!user.accounts[0]?.refresh_token) {
+                console.log(`[Cron] Skipping user ${user.id}: No Google account/refresh token`);
                 continue;
             }
 
-            // Validation passed
-            console.log(`[Cron] Processing user: ${user.id} (Daily Run)`);
-
-            // 3. Refresh Token
+            // 3. Refresh Token (Once per user, used for all their jobs)
             let accessToken: string | undefined;
             try {
                 const { google } = await import('googleapis');
@@ -72,19 +76,26 @@ export async function GET(request: NextRequest) {
 
             if (!accessToken) continue;
 
-            // 4. Run Automation
-            try {
-                const result = await runAutomation(
-                    user.id,
-                    accessToken,
-                    setting.driveFolderLink!,
-                    setting.videosPerDay,
-                    setting.uploadHour
-                );
-                results.push({ userId: user.id, success: true, result });
-            } catch (runError) {
-                console.error(`[Cron] Automation failed for user ${user.id}:`, runError);
-                results.push({ userId: user.id, success: false, error: String(runError) });
+            // 4. Run All Automation Jobs for this User
+            for (const job of user.jobs) {
+                console.log(`[Cron] Processing job "${job.name}" for user ${user.id}`);
+                try {
+                    const result = await runAutomation(
+                        user.id,
+                        accessToken,
+                        job.driveFolderLink,
+                        job.videosPerDay,
+                        job.uploadHour,
+                        false,      // draftOnly
+                        undefined,  // customScheduleTime
+                        false,      // immediate
+                        job.id      // jobId
+                    );
+                    results.push({ userId: user.id, jobId: job.id, success: true, result });
+                } catch (runError) {
+                    console.error(`[Cron] Job "${job.name}" failed for user ${user.id}:`, runError);
+                    results.push({ userId: user.id, jobId: job.id, success: false, error: String(runError) });
+                }
             }
         }
 

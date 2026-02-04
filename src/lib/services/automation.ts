@@ -19,15 +19,21 @@ export interface AutomationResult {
 
 // Main automation function - scans Drive, generates metadata, uploads to YouTube
 // Helper to getting next schedule time
-export async function getNextScheduleTime(userId: string, uploadHour: number, videosPerDay: number): Promise<Date> {
-    // Get the last scheduled video for this user
+export async function getNextScheduleTime(userId: string, uploadHour: number, videosPerDay: number, jobId?: string): Promise<Date> {
+    // Get the last scheduled video for this user (and job if specified)
+    const whereClause: any = {
+        userId,
+        scheduledFor: {
+            not: null
+        }
+    };
+
+    if (jobId) {
+        whereClause.jobId = jobId;
+    }
+
     const lastScheduled = await prisma.video.findFirst({
-        where: {
-            userId,
-            scheduledFor: {
-                not: null
-            }
-        },
+        where: whereClause,
         orderBy: {
             scheduledFor: 'desc'
         }
@@ -39,21 +45,26 @@ export async function getNextScheduleTime(userId: string, uploadHour: number, vi
     if (lastScheduled?.scheduledFor) {
         const lastDate = new Date(lastScheduled.scheduledFor);
 
-        // Count videos scheduled for that specific date for this user
+        // Count videos scheduled for that specific date for this user/job
         const startOfLastDate = new Date(lastDate);
         startOfLastDate.setHours(0, 0, 0, 0);
 
         const endOfLastDate = new Date(lastDate);
         endOfLastDate.setHours(23, 59, 59, 999);
 
-        const countOnLastDate = await prisma.video.count({
-            where: {
-                userId,
-                scheduledFor: {
-                    gte: startOfLastDate,
-                    lte: endOfLastDate
-                }
+        const countQuery: any = {
+            userId,
+            scheduledFor: {
+                gte: startOfLastDate,
+                lte: endOfLastDate
             }
+        };
+        if (jobId) {
+            countQuery.jobId = jobId;
+        }
+
+        const countOnLastDate = await prisma.video.count({
+            where: countQuery
         });
 
         if (countOnLastDate < videosPerDay) {
@@ -92,7 +103,8 @@ export async function runAutomation(
     uploadHour: number = 10,
     draftOnly: boolean = false,
     customScheduleTime?: Date, // New: Allow passing specific schedule time
-    immediate: boolean = false // New: Skip scheduling entirely
+    immediate: boolean = false, // New: Skip scheduling entirely
+    jobId?: string // New: Link to specific automation job for independent scheduling
 ): Promise<AutomationResult> {
     const result: AutomationResult = {
         processed: 0,
@@ -173,7 +185,7 @@ export async function runAutomation(
             // Calculate Schedule Time
             // If customScheduleTime was passed, use it. Otherwise calculate based on user's schedule.
             // If immediate is true, scheduleTime is null.
-            const scheduleTime: Date | null = immediate ? null : (customScheduleTime || await getNextScheduleTime(userId, uploadHour, limit));
+            const scheduleTime: Date | null = immediate ? null : (customScheduleTime || await getNextScheduleTime(userId, uploadHour, limit, jobId));
 
             try {
                 // Generate metadata using AI - try AssemblyAI transcription first
@@ -232,6 +244,7 @@ export async function runAutomation(
                 const videoRecord = await prisma.video.create({
                     data: {
                         userId, // Link to user
+                        jobId,  // Link to specific job if provided
                         driveId: file.id,
                         fileName: file.name,
                         status: draftOnly ? 'DRAFT' : 'PROCESSING',
