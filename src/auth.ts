@@ -70,6 +70,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // Initial sign in - store tokens and user id
             if (account && user) {
                 console.log('Initial login - storing tokens and user id');
+
+                // FIX: Explicitly update the Account in the database to ensure Cron Job has latest tokens
+                // The Adapter might not always update existing accounts when using JWT strategy
+                try {
+                    await prisma.account.updateMany({
+                        where: {
+                            userId: (user as any).id,
+                            provider: account.provider,
+                            providerAccountId: account.providerAccountId
+                        },
+                        data: {
+                            access_token: account.access_token,
+                            refresh_token: account.refresh_token,
+                            expires_at: account.expires_at,
+                            token_type: account.token_type,
+                            scope: account.scope,
+                            id_token: account.id_token,
+                        }
+                    });
+                    console.log('Explicitly updated Account tokens in DB');
+                } catch (dbError) {
+                    console.error('Failed to update Account in DB:', dbError);
+                }
+
                 return {
                     ...token,
                     accessToken: account.access_token,
