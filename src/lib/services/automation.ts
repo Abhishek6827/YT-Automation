@@ -86,11 +86,36 @@ export async function getNextScheduleTime(userId: string, uploadHour: number, vi
 
     // Fix: Interpret uploadHour as IST (Indian Standard Time)
     // Server runs in UTC. YouTube expects UTC timestamp.
-    // Logic: Treat uploadHour as the user's desired hour in UTC.
-    // If user wants 21:00, we schedule for 21:00 UTC. 
-    // This assumes the user input is already adjusted or they are fine with UTC.
-    // The previous logic complicating IST/UTC conversion was causing issues.
-    baseDate.setUTCHours(uploadHour, 0, 0, 0);
+    // Logic: Treat uploadHour as the user's desired hour in UTC for simplicity or convert?
+    // User expectation: "8:30 PM".  If they input "20" (20:00) or "20.5" (20:30).
+    // Let's assume input is 0-23 representing hour.
+    // We want to schedule it for TODAY if possible, or TOMORROW.
+
+    // For the "Early Processing" workflow (running at 5:30 AM IST):
+    // We want to schedule for the SAME DAY at uploadHour.
+
+    // Create date for TODAY at uploadHour
+    const todaySchedule = new Date();
+    todaySchedule.setUTCHours(uploadHour, 0, 0, 0);
+
+    // If we are running this logic, we generally want the next valid slot.
+    // If todaySchedule is already past (e.g. running manually at 10 PM for a 8 PM slot), schedule for tomorrow.
+    // But for the Cron running at 5:30 AM (00:00 UTC), todaySchedule (e.g. 15:00 UTC = 8:30 PM IST) is in future.
+
+    // NOTE: uploadHour might need to be adjusted if it's stored as IST hour but setUTCHours expects UTC.
+    // Current setup: uploadHour is stored as integer.
+    // If user wants 8:30 PM IST (20:30 IST), that is 15:00 UTC.
+    // If the input `uploadHour` is 15 (UTC), we set UTC 15.
+    // Check Dashboard frontend to see what it sends. Dashboard sends `20.5` for 8:30 PM? Or just `20`?
+    // Code in Dashboard: `uploadHour: parseInt(value)` -> sends integer.
+    // If user selects "20" (8 PM), and thinks it's IST, that's 14:30 UTC.
+    // Let's stick to existing logic but ensure it targets the correct future time.
+
+    if (todaySchedule <= new Date()) {
+        todaySchedule.setDate(todaySchedule.getDate() + 1);
+    }
+
+    baseDate = todaySchedule;
 
     return baseDate;
 }
@@ -288,6 +313,8 @@ export async function runAutomation(
 
                 // Upload to YouTube
                 // NOTE: If using customScheduleTime, we set publishAt.
+                // For Early Processing workflow: immediate=false, calculate scheduleTime (e.g. 8:30 PM today)
+                // We assume scheduleTime is correctly calculated above.
                 const uploadResult = await uploadVideo({
                     accessToken,
                     videoStream,

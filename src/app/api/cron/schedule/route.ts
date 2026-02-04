@@ -79,6 +79,10 @@ export async function GET(request: NextRequest) {
             // 4. Run All Automation Jobs for this User
             for (const job of user.jobs) {
                 console.log(`[Cron] Processing job "${job.name}" for user ${user.id}`);
+                // NOTE: We don't check currentHour vs job.uploadHour anymore.
+                // The Cron is expected to run at 5:30 AM IST (00:00 UTC).
+                // It will trigger runAutomation, which schedules the upload for the job's specific uploadHour.
+
                 try {
                     const result = await runAutomation(
                         user.id,
