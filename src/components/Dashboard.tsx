@@ -547,6 +547,19 @@ export default function Dashboard() {
     }
   }
 
+  const toggleJobStatus = async (job: AutomationJob) => {
+    try {
+        await apiFetch("/api/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...job, enabled: !job.enabled }),
+        });
+        fetchJobs();
+    } catch(e) {
+        console.error("Failed to toggle job status", e);
+    }
+  };
+
   const runAutomation = async (
     job: AutomationJob,
     draftOnly: boolean = false,
@@ -1271,35 +1284,51 @@ export default function Dashboard() {
                                             </Button>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-zinc-500 truncate mb-2" title={job.driveFolderLink}>{job.driveFolderLink}</p>
-                                    <div className="flex gap-2 text-[10px] text-zinc-400 mb-3">
-                                        <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                          {(() => {
-                                            const istHour = (job.uploadHour + 5.5) % 24;
-                                            const h = Math.floor(istHour);
-                                            const ampm = h >= 12 ? "PM" : "AM";
-                                            const dispH = h % 12 || 12;
-                                            return `${dispH}:30 ${ampm} IST`;
-                                          })()}
+                                    {/* Status Bar */}
+                                    <div className="flex items-center gap-2 mb-3 bg-zinc-900/50 p-2 rounded border border-zinc-800/50">
+                                        <div className={`w-2 h-2 rounded-full ${job.enabled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-600'}`} />
+                                        <span className={`text-xs font-medium ${job.enabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                            {job.enabled ? 'Active' : 'Inactive'}
                                         </span>
-                                        <span className="bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                            {job.videosPerDay} vids/day
-                                        </span>
+                                        <div className="ml-auto flex items-center gap-2">
+                                             <span className="text-[10px] text-zinc-500 border-r border-zinc-800 pr-2">
+                                                {job.videosPerDay} / day
+                                             </span>
+                                             <span className="text-[10px] text-zinc-300">
+                                                {(() => {
+                                                    const istHour = (job.uploadHour + 5.5) % 24;
+                                                    const h = Math.floor(istHour);
+                                                    const ampm = h >= 12 ? "PM" : "AM";
+                                                    const dispH = h % 12 || 12;
+                                                    return `${dispH}:30 ${ampm} IST`;
+                                                })()}
+                                             </span>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant={job.enabled ? "secondary" : "default"}
+                                            className={`h-7 text-xs ${job.enabled ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+                                            onClick={() => toggleJobStatus(job)}
+                                        >
+                                           {job.enabled ? 'Disable' : 'Enable Daily'}
+                                        </Button>
                                         <Button 
                                             size="sm" 
                                             variant="secondary"
-                                            className="grow h-7 text-xs bg-zinc-800 border-zinc-700" 
+                                            className="h-7 text-xs bg-zinc-800 border-zinc-700" 
                                             disabled={isRunning}
                                             onClick={() => runAutomation(job, false, undefined, true)}
                                         >
                                             <PlayIcon /> <span className="ml-1">Run Now</span>
                                         </Button>
-                                        <Button 
+                                    </div>
+                                    <Button 
                                             size="sm" 
-                                            variant="outline"
-                                            className="grow h-7 text-xs border-zinc-700 text-zinc-400"
+                                            variant="ghost"
+                                            className="w-full h-6 text-[10px] text-zinc-500 hover:text-zinc-300 mt-1"
                                             onClick={() => {
                                                 const now = new Date();
                                                 const target = new Date();
@@ -1311,9 +1340,8 @@ export default function Dashboard() {
                                                 setIsScheduleOpen(true);
                                             }}
                                         >
-                                            Schedule
-                                        </Button>
-                                    </div>
+                                            Schedule One-Time Run
+                                    </Button>
                                 </div>
                             ))}
                             {jobs.length === 0 && <p className="text-center text-xs text-zinc-600 py-4">No automations yet.</p>}
