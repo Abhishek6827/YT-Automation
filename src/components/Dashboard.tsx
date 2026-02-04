@@ -987,8 +987,10 @@ export default function Dashboard() {
     );
   }
 
-  const drafts = videos.filter((v) => v.status === "DRAFT");
-  const published = videos.filter((v) => v.status !== "DRAFT");
+  // Filter out any videos that might still be drafts, or just show all non-drafts if we want to be strict.
+  // Actually, user said "remove drafts completely", so we probably just want to show everything or just "not pending"?
+  // Let's assume everything in the list is a "Video" in the library.
+  const published = videos;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -1173,14 +1175,7 @@ export default function Dashboard() {
               icon: "📁",
               gradient: "from-blue-500/20 to-cyan-500/5",
             },
-            {
-              label: "Drafts",
-              value: drafts.length,
-              sub: "Ready for review",
-              color: "text-purple-400",
-              icon: "📝",
-              gradient: "from-purple-500/20 to-pink-500/5",
-            },
+
             {
               label: "Published",
               value: videos.filter((v) => v.status === "UPLOADED").length,
@@ -1522,28 +1517,7 @@ export default function Dashboard() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <Tabs
-                  defaultValue="published"
-                  className="w-full"
-                  onValueChange={() => setSelectedVideos(new Set())}
-                >
-                  <TabsList className="w-full rounded-none border-b border-zinc-800/50 bg-transparent p-0">
-                    <TabsTrigger
-                      value="published"
-                      className="flex-1 rounded-none border-b-2 border-transparent px-4 py-3 text-zinc-400 data-[state=active]:border-red-500 data-[state=active]:text-white transition-all duration-300"
-                    >
-                      Published ({published.length})
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="drafts"
-                      className="flex-1 rounded-none border-b-2 border-transparent px-4 py-3 text-zinc-400 data-[state=active]:border-purple-500 data-[state=active]:text-white transition-all duration-300"
-                    >
-                      Drafts ({drafts.length})
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="published" className="m-0">
-                    <ScrollArea className="h-[550px]">
+                  <ScrollArea className="h-[550px]">
                       {/* Bulk Actions Header */}
                       <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10 backdrop-blur-sm">
                         <div className="flex items-center gap-2">
@@ -1590,7 +1564,7 @@ export default function Dashboard() {
                       {published.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                           <span className="text-4xl mb-4">📭</span>
-                          <p>No published videos yet</p>
+                          <p>No videos found</p>
                         </div>
                       ) : (
                         <div className="divide-y divide-zinc-800/30">
@@ -1711,158 +1685,6 @@ export default function Dashboard() {
                         </div>
                       )}
                     </ScrollArea>
-                  </TabsContent>
-
-                  <TabsContent value="drafts" className="m-0">
-                    <ScrollArea className="h-[550px]">
-                      {/* Bulk Actions Header */}
-                      <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10 backdrop-blur-sm">
-                        <div className="flex items-center gap-2">
-                          <div
-                            onClick={() => selectAll(drafts)}
-                            className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${drafts.length > 0 && selectedVideos.size === drafts.length ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
-                          >
-                            {drafts.length > 0 &&
-                              selectedVideos.size === drafts.length && (
-                                <CheckIcon />
-                              )}
-                          </div>
-                          <span className="text-sm text-zinc-400">
-                            Select All
-                          </span>
-                        </div>
-                        {selectedVideos.size > 0 && (
-                          <div className="flex gap-2">
-                             <Button
-                              size="sm"
-                              onClick={handleBulkUpload}
-                              disabled={isBulkUploading}
-                              className="h-7 text-xs bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-900/30 transition-all duration-300 hover:scale-105"
-                            >
-                              {isBulkUploading ? (
-                                <RefreshIcon spinning />
-                              ) : (
-                                <span className="mr-1">🚀</span>
-                              )}
-                              Publish Selected ({selectedVideos.size})
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => setShowBulkDeleteConfirm(true)}
-                              className="h-7 text-xs bg-red-600 text-white hover:bg-red-500 border-red-600 shadow-lg shadow-red-900/30 transition-all duration-300 hover:scale-105"
-                            >
-                              Delete ({selectedVideos.size})
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-
-                      {drafts.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-                          <span className="text-4xl mb-4">✨</span>
-                          <p>No drafts yet</p>
-                          <p className="text-xs mt-1">
-                            Click "Scan & Generate AI Metadata" to import videos
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-zinc-800/30">
-                          {drafts.map((video) => (
-                            <div
-                              key={video.id}
-                              className={`grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] gap-4 p-4 hover:bg-zinc-800/20 transition-all duration-200 group ${selectedVideos.has(video.id) ? "bg-blue-500/5" : ""}`}
-                            >
-                              <div className="flex items-center gap-4">
-                              {/* Checkbox */}
-                              <div
-                                className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${selectedVideos.has(video.id) ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-700 hover:border-zinc-500"}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleSelection(video.id);
-                                }}
-                              >
-                                {selectedVideos.has(video.id) && <CheckIcon />}
-                              </div>
-                              {/* Video Preview Button */}
-                              <button
-                                onClick={() => {
-                                  setSelectedPreviewFile({
-                                    id: video.driveId,
-                                    name: video.fileName,
-                                  });
-                                  setDrivePreviewOpen(true);
-                                }}
-                                className="w-16 h-12 bg-zinc-800/80 rounded-lg flex items-center justify-center flex-shrink-0 border border-zinc-700/50 hover:bg-blue-600 hover:border-blue-500 transition-all duration-300 group/play cursor-pointer"
-                                title="Preview Video"
-                              >
-                                <PlayIcon />
-                              </button>
-                              </div>
-
-                              {/* Info */}
-                              <div className="flex-1 min-w-0 space-y-1">
-                                <p className="font-medium text-zinc-200 truncate">
-                                  {video.title || video.fileName}
-                                </p>
-                                <p className="text-xs text-zinc-500 line-clamp-2">
-                                  {video.description ||
-                                    "No description generated"}
-                                </p>
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {video.tags
-                                    ?.split(",")
-                                    .slice(0, 5)
-                                    .map((t, i) => (
-                                      <span
-                                        key={i}
-                                        className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded"
-                                      >
-                                        #{t.trim()}
-                                      </span>
-                                    ))}
-                                </div>
-                              </div>
-
-                              {/* Actions */}
-                              <div className="flex items-center gap-2 flex-shrink-0 justify-end lg:justify-start">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openEditModal(video)}
-                                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-8"
-                                >
-                                  <EditIcon />
-                                  <span className="ml-1">Edit</span>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => approveVideo(video)}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white h-8"
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setDeleteConfirmVideo(video)}
-                                  disabled={isDeleting === video.id}
-                                  className="text-zinc-400 hover:text-red-400 h-8 w-8 p-0"
-                                >
-                                  {isDeleting === video.id ? (
-                                    <RefreshIcon spinning />
-                                  ) : (
-                                    <TrashIcon />
-                                  )}
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
               </CardContent>
             </Card>
           </div>

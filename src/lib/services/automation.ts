@@ -154,12 +154,18 @@ export async function runAutomation(
         }
 
         // Get already processed file IDs from database for this user
-        // Fix: Only exclude successfully processed or pending videos. Allow retrying FAILED ones.
+        // Fix: If draftOnly=true, we skip DRAFTs (already scanned).
+        // If draftOnly=false, we want to include DRAFTs in processing (to upload them), so don't filter them out here.
+        const excludeStatuses = ['UPLOADED', 'PROCESSING', 'PENDING'];
+        if (draftOnly) {
+            excludeStatuses.push('DRAFT');
+        }
+
         const existingVideos = await prisma.video.findMany({
             where: {
                 userId,
                 status: {
-                    in: ['UPLOADED', 'PROCESSING', 'PENDING', 'DRAFT']
+                    in: excludeStatuses
                 }
             },
             select: { driveId: true },
@@ -222,39 +228,51 @@ export async function runAutomation(
                 }
 
                 // Double check duplication with userId
-                const existingCheck = await prisma.video.findUnique({
-                    where: { driveId: file.id } // driveId is unique globally or per user? Schema says @unique globally.
-                    // If shared drive folder, different users might process same file?
-                    // Schema has driveId @unique. This implies a video can be processed only once globally?
-                    // This might be a limitation if multiple users use same file.
-                    // But typically users have their own files.
-                    // Keep global unique for now, but ensure we don't crash.
+                let videoRecord = await prisma.video.findUnique({
+                    where: { driveId: file.id }
                 });
 
-                if (existingCheck) {
-                    console.log(`[Automation] Skipping duplicate: ${file.name}`);
-                    result.details.push({
-                        fileName: file.name,
-                        status: 'skipped',
+                if (videoRecord) {
+                    if (videoRecord.status === 'DRAFT' && !draftOnly) {
+                        // Upgrading Draft to Processing
+                        console.log(`[Automation] Upgrading DRAFT to PROCESSING: ${file.name}`);
+                        videoRecord = await prisma.video.update({
+                            where: { id: videoRecord.id },
+                            data: {
+                                status: 'PROCESSING',
+                                title: metadata.title, // Update metadata if regenerated
+                                description: metadata.description,
+                                tags: metadata.tags.join(','),
+                                transcript: transcript || videoRecord.transcript,
+                                scheduledFor: scheduleTime,
+                                jobId, // Update job ID association
+                            }
+                        });
+                    } else {
+                        console.log(`[Automation] Skipping duplicate: ${file.name}`);
+                        result.details.push({
+                            fileName: file.name,
+                            status: 'skipped',
+                        });
+                        continue;
+                    }
+                } else {
+                    // Create record in database
+                    videoRecord = await prisma.video.create({
+                        data: {
+                            userId, // Link to user
+                            jobId,  // Link to specific job if provided
+                            driveId: file.id,
+                            fileName: file.name,
+                            status: draftOnly ? 'DRAFT' : 'PROCESSING',
+                            title: metadata.title,
+                            description: metadata.description,
+                            tags: metadata.tags.join(','),
+                            transcript: transcript,
+                            scheduledFor: draftOnly ? null : scheduleTime,
+                        },
                     });
-                    continue;
                 }
-
-                // Create record in database
-                const videoRecord = await prisma.video.create({
-                    data: {
-                        userId, // Link to user
-                        jobId,  // Link to specific job if provided
-                        driveId: file.id,
-                        fileName: file.name,
-                        status: draftOnly ? 'DRAFT' : 'PROCESSING',
-                        title: metadata.title,
-                        description: metadata.description,
-                        tags: metadata.tags.join(','),
-                        transcript: transcript,
-                        scheduledFor: draftOnly ? null : scheduleTime,
-                    },
-                });
 
                 // If draftOnly, stop here
                 if (draftOnly) {
