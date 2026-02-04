@@ -1301,41 +1301,13 @@ export default function Dashboard() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Button
-                                            size="sm"
-                                            variant={job.enabled ? "secondary" : "default"}
-                                            className={`h-7 text-xs ${job.enabled ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
-                                            onClick={() => toggleJobStatus(job)}
-                                        >
-                                           {job.enabled ? 'Disable' : 'Enable Daily'}
-                                        </Button>
-                                        <Button 
-                                            size="sm" 
-                                            variant="secondary"
-                                            className="h-7 text-xs bg-zinc-800 border-zinc-700" 
-                                            disabled={isRunning}
-                                            onClick={() => runAutomation(job, false, undefined, true)}
-                                        >
-                                            <PlayIcon /> <span className="ml-1">Run Now</span>
-                                        </Button>
-                                    </div>
-                                    <Button 
-                                            size="sm" 
-                                            variant="ghost"
-                                            className="w-full h-6 text-[10px] text-zinc-500 hover:text-zinc-300 mt-1"
-                                            onClick={() => {
-                                                const now = new Date();
-                                                const target = new Date();
-                                                target.setUTCHours(job.uploadHour, 0, 0, 0);
-                                                if (target <= now) target.setDate(target.getDate() + 1);
-                                                const localIso = new Date(target.getTime() - (target.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
-                                                setScheduleDateTime(localIso);
-                                                setJobToSchedule(job);
-                                                setIsScheduleOpen(true);
-                                            }}
-                                        >
-                                            Schedule One-Time Run
+                                    <Button
+                                        size="sm"
+                                        variant={job.enabled ? "secondary" : "default"}
+                                        className={`w-full h-8 text-xs font-medium transition-all ${job.enabled ? 'bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.4)] shadow-lg shadow-emerald-900/20'}`}
+                                        onClick={() => toggleJobStatus(job)}
+                                    >
+                                       {job.enabled ? 'Unschedule' : 'Schedule'}
                                     </Button>
                                 </div>
                             ))}
