@@ -45,7 +45,7 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
         description,
         tags,
         privacyStatus = 'unlisted', // Default to unlisted for copyright protection
-        categoryId = '22', // Entertainment category
+        categoryId = '1', // Film & Animation category
         publishAt,
     } = params;
 
@@ -65,6 +65,7 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
                     privacyStatus: publishAt ? 'private' : privacyStatus,
                     publishAt,
                     selfDeclaredMadeForKids: false,
+                    publicStatsViewable: false,
                 },
             },
             media: {
@@ -156,7 +157,7 @@ export async function updateVideoMetadata(
                     title: metadata.title,
                     description: metadata.description,
                     tags: metadata.tags,
-                    categoryId: '22',
+                    categoryId: '1',
                 },
             },
         });
