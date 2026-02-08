@@ -65,7 +65,6 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
                     privacyStatus: publishAt ? 'private' : privacyStatus,
                     publishAt,
                     selfDeclaredMadeForKids: false,
-                    publicStatsViewable: false,
                 },
             },
             media: {
@@ -175,7 +174,6 @@ export async function updateVideoMetadata(
                     privacyStatus: video.status?.privacyStatus,
                     selfDeclaredMadeForKids: video.status?.selfDeclaredMadeForKids,
                     publishAt: video.status?.publishAt, // Preserve schedule if any
-                    publicStatsViewable: false, // Hide like counts
                 },
             },
         });
