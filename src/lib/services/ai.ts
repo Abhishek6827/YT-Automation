@@ -226,3 +226,98 @@ Output ONLY valid JSON. Make it VIRAL!`;
         return generateVideoMetadata(fileName);
     }
 }
+
+// Generate metadata from visual analysis (Gemini Vision)
+export async function generateMetadataFromVisuals(
+    images: Buffer[],
+    fileName: string
+): Promise<VideoMetadata> {
+    // Check API key at call time
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error('[AI] GEMINI_API_KEY is not set!');
+        return generateVideoMetadata(fileName); // Fallback to filename-based
+    }
+
+    console.log(`[AI] Generating metadata from ${images.length} visual frames`);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    // Add randomization for variety
+    const randomSeed = Math.random().toString(36).substring(7);
+    const randomEmojis = ['😱', '💀', '🔥', '✨', '😭', '🤯', '👀', '💪', '🎯', '💯', '😂', '🙌'];
+    const selectedEmojis = randomEmojis.sort(() => 0.5 - Math.random()).slice(0, 4).join('');
+
+    // Prepare image parts for Gemini
+    const imageParts = images.map(buffer => ({
+        inlineData: {
+            data: buffer.toString('base64'),
+            mimeType: 'image/jpeg'
+        }
+    }));
+
+    const prompt = `You are a TOP YouTube Shorts creator with 10M+ subscribers. Generate VIRAL metadata based on these video frames.
+    
+SEED: ${randomSeed}
+EMOJIS: ${selectedEmojis}
+
+## YOUR TASK:
+Analyze the provided video frames (screenshots) to understand the visual content, action, and mood.
+Create YouTube metadata that:
+1. Describes the VISUAL ACTION or SCENE shown in the images
+2. Creates curiosity about what happens next
+3. Uses emotional triggers matching the visual tone
+4. ALWAYS appends exactly 3 relevant hashtags to the title
+
+Generate JSON:
+{
+  "title": "Catchy title based on visual action (max 60 chars, use emojis) #tag1 #tag2 #tag3",
+  "description": "Hook sentence describing the video. What viewers will see. Call to action. Then 5 relevant hashtags.",
+  "tags": ["15-20 specific tags based on visual content, each max 30 chars"]
+}
+
+YOUTUBE LIMITS:
+- Title: max 100 characters (aim for 40-60)
+- Tags: max 500 characters TOTAL
+- Each tag: max 30 characters
+
+Output ONLY valid JSON. Make it VIRAL!`;
+
+    try {
+        const result = await model.generateContent([prompt, ...imageParts]);
+        const response = result.response;
+        const text = response.text();
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('No JSON found in response');
+        }
+
+        const metadata = JSON.parse(jsonMatch[0]) as VideoMetadata;
+
+        // Validate and sanitize
+        let tags = Array.isArray(metadata.tags)
+            ? metadata.tags.map(t => String(t).trim().replace(/^#/, '').slice(0, 30))
+            : [];
+
+        let totalChars = 0;
+        const limitedTags: string[] = [];
+        for (const tag of tags) {
+            if (totalChars + tag.length + 1 <= 500) {
+                limitedTags.push(tag);
+                totalChars += tag.length + 1;
+            } else break;
+        }
+
+        console.log('[AI] Generated metadata from visuals:', metadata.title);
+        return {
+            title: (metadata.title || fileName).slice(0, 100),
+            description: (metadata.description || '').slice(0, 5000),
+            tags: limitedTags,
+        };
+    } catch (error) {
+        console.error('[AI] Error generating from visuals, falling back to filename:', error);
+        // Fallback to filename-based generation
+        return generateVideoMetadata(fileName);
+    }
+}

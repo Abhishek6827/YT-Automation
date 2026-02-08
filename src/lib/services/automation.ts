@@ -1,8 +1,12 @@
 import { prisma } from '@/lib/db';
 import { listVideosFromFolder, downloadFile, extractFolderId, downloadFileBuffer, getFileMetadata, DriveFile } from '@/lib/services/drive';
-import { generateVideoMetadata, generateMetadataFromTranscript } from '@/lib/services/ai';
+import { generateVideoMetadata, generateMetadataFromTranscript, generateMetadataFromVisuals } from '@/lib/services/ai';
 import { uploadVideo, getVideoStatus, updateVideoVisibility } from '@/lib/services/youtube';
 import { uploadAndTranscribe } from '@/lib/services/assemblyai';
+import { extractFrames } from '@/lib/services/video';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export interface AutomationResult {
     processed: number;
@@ -246,7 +250,44 @@ export async function runAutomation(
                     }
                 }
 
-                // Fallback to filename-based generation if transcription failed
+                if (metadata && transcript) {
+                    // We have a transcript, stick with it
+                } else {
+                    // Try Visual Analysis if transcript failed or wasn't attempted
+                    console.log(`[Automation] No transcript available, attempting Visual Analysis for: ${file.name}`);
+                    try {
+                        // We need the full file for ffmpeg processing
+                        const stream = await downloadFile(accessToken, file.id);
+
+                        // Save to temp file
+                        const tempPath = path.join(os.tmpdir(), `yt-temp-${file.id}-${Date.now()}.mp4`);
+                        const writeStream = fs.createWriteStream(tempPath);
+
+                        await new Promise<void>((resolve, reject) => {
+                            stream.pipe(writeStream);
+                            writeStream.on('finish', () => resolve());
+                            writeStream.on('error', reject);
+                        });
+
+                        // Extract frames
+                        const frames = await extractFrames(tempPath, 3);
+
+                        // Generate metadata
+                        if (frames.length > 0) {
+                            metadata = await generateMetadataFromVisuals(frames, file.name);
+                        }
+
+                        // Cleanup temp file
+                        fs.unlink(tempPath, (err: NodeJS.ErrnoException | null) => {
+                            if (err) console.error('[Automation] Error deleting temp video file:', err);
+                        });
+
+                    } catch (visualError) {
+                        console.error('[Automation] Visual analysis failed:', visualError);
+                    }
+                }
+
+                // Fallback to filename-based generation if both transcript and visual failed
                 if (!metadata) {
                     console.log(`[Automation] Using filename-based metadata for: ${file.name}`);
                     metadata = await generateVideoMetadata(file.name);
