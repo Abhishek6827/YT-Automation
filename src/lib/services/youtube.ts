@@ -45,7 +45,7 @@ export async function uploadVideo(params: UploadVideoParams): Promise<UploadResu
         description,
         tags,
         privacyStatus = 'unlisted', // Default to unlisted for copyright protection
-        categoryId = '1', // Film & Animation category
+        categoryId = '24', // Entertainment category
         publishAt,
     } = params;
 
@@ -149,15 +149,33 @@ export async function updateVideoMetadata(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const youtube = createYouTubeClient(accessToken);
+
+        // First get the current video to preserve other status fields
+        const getResponse = await youtube.videos.list({
+            part: ['snippet', 'status'],
+            id: [videoId],
+        });
+
+        const video = getResponse.data.items?.[0];
+        if (!video) {
+            return { success: false, error: 'Video not found' };
+        }
+
         await youtube.videos.update({
-            part: ['snippet'],
+            part: ['snippet', 'status'],
             requestBody: {
                 id: videoId,
                 snippet: {
                     title: metadata.title,
                     description: metadata.description,
                     tags: metadata.tags,
-                    categoryId: '1',
+                    categoryId: '24', // Entertainment category
+                },
+                status: {
+                    privacyStatus: video.status?.privacyStatus,
+                    selfDeclaredMadeForKids: video.status?.selfDeclaredMadeForKids,
+                    publishAt: video.status?.publishAt, // Preserve schedule if any
+                    publicStatsViewable: false, // Hide like counts
                 },
             },
         });
