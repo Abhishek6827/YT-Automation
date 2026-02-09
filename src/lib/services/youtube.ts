@@ -191,7 +191,7 @@ export async function updateVideoMetadata(
 export async function getVideoStatus(
     accessToken: string,
     videoId: string
-): Promise<{ success: boolean; status?: string; copyrightInfo?: CopyrightClaimInfo; hasRestrictions?: boolean; error?: string }> {
+): Promise<{ success: boolean; status?: string; uploadStatus?: string; copyrightInfo?: CopyrightClaimInfo; hasRestrictions?: boolean; error?: string }> {
     try {
         const youtube = createYouTubeClient(accessToken);
 
@@ -240,6 +240,7 @@ export async function getVideoStatus(
         return {
             success: true,
             status: `${uploadStatus}/${privacyStatus}`,
+            uploadStatus: uploadStatus || 'unknown',
             copyrightInfo,
             hasRestrictions: copyrightInfo.hasClaims || !!regionRestriction, // Flag if any restriction exists
         };

@@ -374,11 +374,27 @@ export async function runAutomation(
                     // SAFETY CHECK: Verify video has no restrictions
                     // Only run this if we intended to schedule it (not immediate public)
                     try {
-                        console.log(`[Automation] Video ${uploadResult.videoId} uploaded. Waiting 15s for safety check...`);
-                        await new Promise(resolve => setTimeout(resolve, 15000));
+                        console.log(`[Automation] Video ${uploadResult.videoId} uploaded. Waiting for processing to complete...`);
 
-                        const safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
-                        console.log(`[Automation] Safety check result for ${uploadResult.videoId}:`, JSON.stringify(safetyCheck, null, 2));
+                        // Poll for processing completion (max 2 minutes)
+                        let safetyCheck;
+                        let attempts = 0;
+                        const maxAttempts = 24; // 24 * 5s = 120s
+
+                        while (attempts < maxAttempts) {
+                            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s between checks
+                            safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
+
+                            console.log(`[Automation] Check ${attempts + 1}/${maxAttempts}: Status=${safetyCheck.uploadStatus}`);
+
+                            if (safetyCheck.uploadStatus === 'processed' || safetyCheck.uploadStatus === 'failed' || safetyCheck.uploadStatus === 'rejected') {
+                                break;
+                            }
+                            attempts++;
+                        }
+
+                        if (!safetyCheck) safetyCheck = await getVideoStatus(accessToken, uploadResult.videoId);
+                        console.log(`[Automation] Final Safety Check for ${uploadResult.videoId}:`, JSON.stringify(safetyCheck, null, 2));
 
                         if (safetyCheck.success && safetyCheck.hasRestrictions) {
                             console.warn(`[Automation] Video ${file.name} has restrictions. Reverting to PRIVATE (Unscheduled).`);
