@@ -17,7 +17,7 @@ export function extractFolderId(link: string): string | null {
 
     match = link.match(fileRegex);
     if (match) return match[1];
-
+    D
     match = link.match(idRegex);
     if (match) return match[1];
 

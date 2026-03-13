@@ -11,11 +11,43 @@ import { promisify } from 'util';
 if (ffmpegPath) {
     ffmpeg.setFfmpegPath(ffmpegPath);
 } else {
-    console.warn('[Video] ffmpeg-static not found, ffmpeg might not work if not in PATH');
+    // Try to resolve manually if possible, or just warn
+    const manualFfmpeg = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+    if (fs.existsSync(manualFfmpeg)) {
+        ffmpeg.setFfmpegPath(manualFfmpeg);
+    } else {
+        console.warn('[Video] ffmpeg-static not found, ffmpeg might not work if not in PATH');
+    }
 }
 
-if (ffprobePath) {
-    ffmpeg.setFfprobePath(ffprobePath);
+// Fix for ffprobe-static not detecting OS correctly in some environments
+let resolvedFfprobePath = ffprobePath;
+
+if (!resolvedFfprobePath || !fs.existsSync(resolvedFfprobePath)) {
+    console.warn(`[Video] ffprobe-static path not found or invalid: ${resolvedFfprobePath}`);
+    // Try to find it in node_modules manually
+    const possiblePaths = [
+        // Windows
+        path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'win32', 'x64', 'ffprobe.exe'),
+        // Linux
+        path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'linux', 'x64', 'ffprobe'),
+        // macOS 
+        path.join(process.cwd(), 'node_modules', 'ffprobe-static', 'bin', 'darwin', 'x64', 'ffprobe'),
+    ];
+
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            console.log(`[Video] Found ffprobe manually at: ${p}`);
+            resolvedFfprobePath = p;
+            break;
+        }
+    }
+}
+
+if (resolvedFfprobePath) {
+    ffmpeg.setFfprobePath(resolvedFfprobePath);
+} else {
+    console.error('[Video] Could not find ffprobe executable!');
 }
 
 /**
